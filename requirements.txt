@@ -6,3 +6,4 @@ SQLAlchemy==2.0.51
 aiomysql==0.3.2
 redis==8.0.1
 httpx==0.28.1
+paramiko==3.5.1

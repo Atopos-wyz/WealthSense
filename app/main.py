@@ -21,8 +21,11 @@ from app.utils.exceptions import (
 logger = logging.getLogger(__name__)
 
 
-async def monitor_risk_timeouts(app: FastAPI) -> None:
-    while True:
+async def monitor_risk_timeouts(
+    app: FastAPI,
+    stop_event: asyncio.Event,
+) -> None:
+    while not stop_event.is_set():
         service = app.state.container.operation_service
         maintenance_steps = (
             service.expire_risk_reviews,
@@ -44,7 +47,10 @@ async def monitor_risk_timeouts(app: FastAPI) -> None:
                 await publisher.flush_pending()
             except Exception:
                 logger.exception("operator outbox flush failed")
-        await asyncio.sleep(1)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=1)
+        except TimeoutError:
+            pass
 
 
 @asynccontextmanager
@@ -52,7 +58,10 @@ async def lifespan(app: FastAPI):
     container = await build_container(get_settings())
     app.state.container = container
     subscriber_task: asyncio.Task | None = None
-    timeout_task = asyncio.create_task(monitor_risk_timeouts(app))
+    stop_event = asyncio.Event()
+    timeout_task = asyncio.create_task(
+        monitor_risk_timeouts(app, stop_event)
+    )
     if container.subscriber:
         subscriber_task = asyncio.create_task(
             container.subscriber.listen(
@@ -68,12 +77,20 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         if subscriber_task:
-            subscriber_task.cancel()
+            container.subscriber.stop()
+            try:
+                await asyncio.wait_for(subscriber_task, timeout=2)
+            except TimeoutError:
+                subscriber_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await subscriber_task
+        stop_event.set()
+        try:
+            await asyncio.wait_for(timeout_task, timeout=10)
+        except TimeoutError:
+            timeout_task.cancel()
             with suppress(asyncio.CancelledError):
-                await subscriber_task
-        timeout_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await timeout_task
+                await timeout_task
         await container.close()
 
 

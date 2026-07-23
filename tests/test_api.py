@@ -1,13 +1,25 @@
 import unittest
 import time
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.config.settings import Settings
 from app.main import app
 from app.utils.security import encode_hs256_jwt
 
 
 class ApiTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.settings_patcher = patch(
+            "app.main.get_settings",
+            return_value=Settings(_env_file=None),
+        )
+        self.settings_patcher.start()
+
+    def tearDown(self) -> None:
+        self.settings_patcher.stop()
+
     def test_operation_requires_jwt(self) -> None:
         with TestClient(app) as client:
             response = client.post(
