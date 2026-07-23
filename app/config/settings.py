@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import (
     AliasChoices,
@@ -183,6 +184,30 @@ class Settings(BaseSettings):
         default="agent:events:durable",
         validation_alias=_wealthsense_alias("EVENT_STREAM_KEY"),
     )
+    llm_base_url: str | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("LLM_BASE_URL"),
+    )
+    llm_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("LLM_API_KEY"),
+    )
+    llm_model: str | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("LLM_MODEL"),
+    )
+    llm_timeout_seconds: float = Field(
+        default=10,
+        gt=0,
+        le=60,
+        validation_alias=_wealthsense_alias("LLM_TIMEOUT_SECONDS"),
+    )
+    llm_confidence_threshold: float = Field(
+        default=0.75,
+        ge=0,
+        le=1,
+        validation_alias=_wealthsense_alias("LLM_CONFIDENCE_THRESHOLD"),
+    )
     trusted_agent_ids: set[str] = Field(
         default={
             "customer",
@@ -227,6 +252,25 @@ class Settings(BaseSettings):
             raise ValueError("NEO4J_URI 必须使用 Neo4j 或 Bolt URI 协议")
         return value
 
+    @field_validator("llm_base_url")
+    @classmethod
+    def validate_llm_base_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            raise ValueError("LLM_BASE_URL must be a valid HTTP(S) URL")
+        loopback_hosts = {"127.0.0.1", "localhost", "::1"}
+        if parsed.scheme != "https" and parsed.hostname not in loopback_hosts:
+            raise ValueError(
+                "remote LLM_BASE_URL must use HTTPS; "
+                "HTTP is allowed only for loopback hosts"
+            )
+        return value
+
     @model_validator(mode="after")
     def validate_configuration(self) -> "Settings":
         if (
@@ -261,6 +305,10 @@ class Settings(BaseSettings):
     @property
     def has_external_infrastructure(self) -> bool:
         return bool(self.mysql_url and self.redis_url)
+
+    @property
+    def has_llm_intent_recognition(self) -> bool:
+        return bool(self.llm_base_url and self.llm_api_key and self.llm_model)
 
     @property
     def is_production(self) -> bool:

@@ -6,6 +6,10 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.agent.operator.agent import BusinessOperatorAgent
+from app.agent.operator.llm_intent_classifier import (
+    HybridIntentRecognizer,
+    OpenAICompatibleIntentRecognizer,
+)
 from app.config.database import create_engine, create_session_factory, create_tables
 from app.config.redis import create_redis_client
 from app.config.settings import Settings
@@ -223,7 +227,28 @@ async def build_container(settings: Settings) -> AppContainer:
             jwt_secret=settings.jwt_secret,
             jwt_issuer=settings.jwt_issuer,
         )
-        operator_agent = BusinessOperatorAgent(operation_service)
+        llm_recognizer = None
+        if settings.has_llm_intent_recognition:
+            if not (
+                settings.llm_base_url
+                and settings.llm_api_key
+                and settings.llm_model
+            ):
+                raise RuntimeError("LLM intent recognition configuration is incomplete")
+            llm_recognizer = OpenAICompatibleIntentRecognizer(
+                base_url=settings.llm_base_url,
+                api_key=settings.llm_api_key.get_secret_value(),
+                model=settings.llm_model,
+                timeout_seconds=settings.llm_timeout_seconds,
+            )
+        intent_recognizer = HybridIntentRecognizer(
+            llm_recognizer,
+            confidence_threshold=settings.llm_confidence_threshold,
+        )
+        operator_agent = BusinessOperatorAgent(
+            operation_service,
+            intent_recognizer,
+        )
         event_router = OperatorEventRouter(operation_service)
         return AppContainer(
             settings=settings,
