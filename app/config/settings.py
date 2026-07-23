@@ -1,39 +1,125 @@
-"""环境配置读取。"""
+"""从环境变量加载的强类型应用配置。"""
 
-import os
-from dataclasses import dataclass
+from __future__ import annotations
+
 from functools import lru_cache
+from pathlib import Path
+from typing import Literal
 
-from dotenv import load_dotenv
-from sqlalchemy import make_url
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DEVELOPMENT_JWT_SECRET = "development-only-change-me"
 
 
-@dataclass(frozen=True)
-class Settings:
-    app_name: str
-    app_version: str
-    database_url: str
-    redis_url: str | None
+class Settings(BaseSettings):
+    """公共应用基础设施的集中配置。"""
+
+    model_config = SettingsConfigDict(
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    app_name: str = "WealthSense"
+    app_env: Literal["development", "test", "production"] = "development"
+    debug: bool = False
+
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    log_json: bool = True
+
+    jwt_secret_key: SecretStr = SecretStr(DEFAULT_DEVELOPMENT_JWT_SECRET)
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    jwt_access_token_expire_minutes: int = Field(default=60, ge=1, le=1440)
+    jwt_issuer: str = "wealthsense"
+    jwt_audience: str = "wealthsense-api"
+
+    mysql_host: str = "127.0.0.1"
+    mysql_port: int = Field(default=3306, ge=1, le=65535)
+    mysql_database: str = "finance"
+    mysql_user: str = "finance_app"
+    mysql_password: SecretStr
+    mysql_pool_size: int = Field(default=5, ge=1, le=100)
+    mysql_max_overflow: int = Field(default=10, ge=0, le=200)
+    mysql_pool_recycle_seconds: int = Field(default=1800, ge=60)
+
+    redis_host: str = "127.0.0.1"
+    redis_port: int = Field(default=6379, ge=1, le=65535)
+    redis_db: int = Field(default=0, ge=0)
+    redis_password: SecretStr
+    redis_max_connections: int = Field(default=20, ge=1, le=1000)
+
+    neo4j_uri: str = "bolt://127.0.0.1:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: SecretStr
+    neo4j_database: str = "neo4j"
+    neo4j_max_connection_pool_size: int = Field(default=20, ge=1, le=1000)
+
+    milvus_host: str = "127.0.0.1"
+    milvus_port: int = Field(default=19530, ge=1, le=65535)
+    milvus_user: str = "root"
+    milvus_root_password: SecretStr
+    milvus_database: str = "default"
+
+    database_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+
+    @field_validator(
+        "mysql_password",
+        "redis_password",
+        "neo4j_password",
+        "milvus_root_password",
+    )
+    @classmethod
+    def validate_non_empty_secret(cls, value: SecretStr) -> SecretStr:
+        if not value.get_secret_value().strip():
+            raise ValueError("数据库密码不能为空")
+        return value
+
+    @field_validator(
+        "mysql_database",
+        "mysql_user",
+        "neo4j_user",
+        "neo4j_database",
+        "milvus_database",
+    )
+    @classmethod
+    def validate_non_empty_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("配置值不能为空")
+        return value
+
+    @field_validator("neo4j_uri")
+    @classmethod
+    def validate_neo4j_uri(cls, value: str) -> str:
+        if not value.startswith(("bolt://", "bolt+s://", "neo4j://", "neo4j+s://")):
+            raise ValueError("NEO4J_URI 必须使用 Neo4j 或 Bolt URI 协议")
+        return value
+
+    @model_validator(mode="after")
+    def validate_production_security(self) -> Settings:
+        if (
+            self.app_env == "production"
+            and self.jwt_secret_key.get_secret_value() == DEFAULT_DEVELOPMENT_JWT_SECRET
+        ):
+            raise ValueError("生产环境必须配置 JWT_SECRET_KEY")
+        return self
+
+    @property
+    def milvus_uri(self) -> str:
+        return f"http://{self.milvus_host}:{self.milvus_port}"
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    load_dotenv()
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError(".env 中缺少 DATABASE_URL")
-    parsed_url = make_url(database_url)
-    if (
-        os.getenv("SSH_HOST")
-        and parsed_url.host in {"127.0.0.1", "localhost"}
-    ):
-        tunnel_port = int(os.getenv("MYSQL_TUNNEL_PORT", "13306"))
-        database_url = parsed_url.set(port=tunnel_port).render_as_string(
-            hide_password=False
-        )
-    return Settings(
-        app_name=os.getenv("APP_NAME", "WealthSense"),
-        app_version=os.getenv("APP_VERSION", "0.1.0"),
-        database_url=database_url,
-        redis_url=os.getenv("REDIS_URL"),
-    )
+    """返回按约定只读的缓存配置实例。"""
+
+    return Settings()
+
+
+def clear_settings_cache() -> None:
+    """清除配置缓存，主要用于测试和受控重载。"""
+
+    get_settings.cache_clear()
