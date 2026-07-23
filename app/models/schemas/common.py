@@ -85,10 +85,10 @@ class AgentEvent(BaseModel):
     occurred_at: datetime = Field(default_factory=utc_now)
     expires_at: datetime | None = None
     schema_version: str = "1.0"
+    signature: str | None = None
 
 
 class ApiResponse(BaseModel):
     success: bool
     request_id: str
     error: ErrorDetail | None = None
-

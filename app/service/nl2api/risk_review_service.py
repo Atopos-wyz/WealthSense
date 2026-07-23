@@ -42,9 +42,11 @@ class RiskReviewService:
             expires_at=now + timedelta(seconds=self.ttl_seconds),
         )
         operation.risk_request_event_id = event.event_id
-        await self.repository.save(operation)
-        await self.repository.add_risk_review(
-            {
+        updated = await self.repository.prepare_risk_review(
+            operation.operation_id,
+            operation.version,
+            event.event_id,
+            review_values={
                 "operation_id": operation.operation_id,
                 "operation_version": operation.version,
                 "request_event_id": event.event_id,
@@ -58,7 +60,14 @@ class RiskReviewService:
                 "requested_at": now,
                 "responded_at": None,
                 "expires_at": event.expires_at,
-            }
+            },
+            outbox_values={
+                "event_id": event.event_id,
+                "channel": EventChannel.RISK_COMMAND.value,
+                "payload": event.model_dump(mode="json"),
+            },
         )
+        if not updated:
+            raise RuntimeError("operation changed before risk review publication")
         await self.publisher.publish(EventChannel.RISK_COMMAND, event)
         return event

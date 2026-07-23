@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     confirmation_ttl_seconds: int = Field(default=900, ge=60)
     risk_review_ttl_seconds: int = Field(default=300, ge=30)
     idempotency_ttl_seconds: int = Field(default=3600, ge=60)
+    jwt_secret: str = "development-jwt-secret-change-me"
+    jwt_issuer: str = "wealthsense"
+    customer_event_hmac_secret: str = "dev-customer-event-secret"
+    advisor_event_hmac_secret: str = "dev-advisor-event-secret"
+    risk_event_hmac_secret: str = "dev-risk-event-secret"
+    analyst_event_hmac_secret: str = "dev-analyst-event-secret"
+    operator_event_hmac_secret: str = "dev-operator-event-secret"
+    event_stream_key: str = "agent:events:durable"
     trusted_agent_ids: set[str] = {
         "customer",
         "advisor",
@@ -32,8 +40,21 @@ class Settings(BaseSettings):
     def has_external_infrastructure(self) -> bool:
         return bool(self.mysql_url and self.redis_url)
 
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() == "production"
+
+    @property
+    def event_hmac_secrets(self) -> dict[str, str]:
+        return {
+            "customer": self.customer_event_hmac_secret,
+            "advisor": self.advisor_event_hmac_secret,
+            "risk": self.risk_event_hmac_secret,
+            "analyst": self.analyst_event_hmac_secret,
+            "operator": self.operator_event_hmac_secret,
+        }
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

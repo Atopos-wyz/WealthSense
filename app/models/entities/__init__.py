@@ -5,6 +5,7 @@ from app.models.entities.operation import (
     ExecutionAttemptEntity,
     OperationEntity,
     OperationVersionEntity,
+    OutboxEventEntity,
     ProcessedEventEntity,
     RiskReviewEntity,
 )
@@ -16,7 +17,7 @@ __all__ = [
     "ExecutionAttemptEntity",
     "OperationEntity",
     "OperationVersionEntity",
+    "OutboxEventEntity",
     "ProcessedEventEntity",
     "RiskReviewEntity",
 ]
-

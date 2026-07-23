@@ -12,6 +12,7 @@ from app.models.schemas.operation import (
     ConfirmOperationRequest,
     OperationResponse,
     RiskReviewResult,
+    UpdateOperationRequest,
 )
 
 __all__ = [
@@ -26,5 +27,5 @@ __all__ = [
     "OperationStatus",
     "RiskDecision",
     "RiskReviewResult",
+    "UpdateOperationRequest",
 ]
-

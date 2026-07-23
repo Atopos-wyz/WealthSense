@@ -13,6 +13,7 @@ from app.dao.mysql.operation_repository import (
     SqlAlchemyOperationRepository,
 )
 from app.dao.redis.event_publisher import (
+    DurableEventPublisher,
     EventPublisher,
     InMemoryEventPublisher,
     RedisEventPublisher,
@@ -56,6 +57,18 @@ async def build_container(settings: Settings) -> AppContainer:
     subscriber: RedisEventSubscriber | None = None
     engine: AsyncEngine | None = None
 
+    if bool(settings.mysql_url) != bool(settings.redis_url):
+        raise RuntimeError(
+            "WEALTHSENSE_MYSQL_URL and WEALTHSENSE_REDIS_URL "
+            "must be configured together"
+        )
+    if settings.is_production:
+        secrets = [settings.jwt_secret, *settings.event_hmac_secrets.values()]
+        if any(secret.startswith("dev-") or "change-me" in secret for secret in secrets):
+            raise RuntimeError(
+                "production requires non-default JWT and per-Agent event secrets"
+            )
+
     if settings.has_external_infrastructure:
         engine = create_engine(settings.mysql_url or "")
         await create_tables(engine)
@@ -65,12 +78,23 @@ async def build_container(settings: Settings) -> AppContainer:
         )
         redis = create_redis_client(settings.redis_url or "")
         state_store: StateStore = RedisStateStore(redis)
-        publisher: EventPublisher = RedisEventPublisher(redis)
-        subscriber = RedisEventSubscriber(redis)
+        transport: EventPublisher = RedisEventPublisher(
+            redis,
+            settings.event_hmac_secrets,
+            settings.event_stream_key,
+        )
+        subscriber = RedisEventSubscriber(redis, settings.event_hmac_secrets)
     else:
+        if settings.is_production:
+            raise RuntimeError(
+                "production requires both WEALTHSENSE_MYSQL_URL and "
+                "WEALTHSENSE_REDIS_URL"
+            )
         repository = InMemoryOperationRepository()
         state_store = InMemoryStateStore()
-        publisher = InMemoryEventPublisher()
+        transport = InMemoryEventPublisher(settings.event_hmac_secrets)
+
+    publisher: EventPublisher = DurableEventPublisher(repository, transport)
 
     tool_registry = OperationToolRegistry()
     operation_service = OperationService(
@@ -81,6 +105,8 @@ async def build_container(settings: Settings) -> AppContainer:
         risk_review_ttl_seconds=settings.risk_review_ttl_seconds,
         confirmation_ttl_seconds=settings.confirmation_ttl_seconds,
         idempotency_ttl_seconds=settings.idempotency_ttl_seconds,
+        jwt_secret=settings.jwt_secret,
+        jwt_issuer=settings.jwt_issuer,
     )
     operator_agent = BusinessOperatorAgent(operation_service)
     event_router = OperatorEventRouter(operation_service)

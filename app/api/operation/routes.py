@@ -6,7 +6,9 @@ from app.models.schemas.operation import (
     ChatOperationRequest,
     ConfirmOperationRequest,
     OperationResponse,
+    UpdateOperationRequest,
 )
+from app.utils.exceptions import PermissionDeniedError
 
 router = APIRouter(prefix="/api/operation", tags=["business-operator"])
 
@@ -24,17 +26,50 @@ async def create_operation(
 async def confirm_operation(
     operation_id: str,
     body: ConfirmOperationRequest,
+    operator: OperatorDependency,
     container: ContainerDependency,
 ) -> OperationResponse:
+    if body.confirmer_id != operator.operator_id:
+        raise PermissionDeniedError(
+            "OP_PERMISSION_DENIED",
+            "确认人必须与当前登录身份一致",
+        )
+    await container.operation_service.authorize_access(operation_id, operator)
     return await container.operation_service.confirm(operation_id, body)
+
+
+@router.patch("/{operation_id}/params", response_model=OperationResponse)
+async def update_operation_parameters(
+    operation_id: str,
+    body: UpdateOperationRequest,
+    operator: OperatorDependency,
+    container: ContainerDependency,
+) -> OperationResponse:
+    if body.updated_by != operator.operator_id:
+        raise PermissionDeniedError(
+            "OP_PERMISSION_DENIED",
+            "参数修改人必须与当前登录身份一致",
+        )
+    return await container.operation_service.update_parameters(
+        operation_id,
+        body,
+        operator,
+    )
 
 
 @router.post("/{operation_id}/cancel", response_model=OperationResponse)
 async def cancel_operation(
     operation_id: str,
     body: CancelOperationRequest,
+    operator: OperatorDependency,
     container: ContainerDependency,
 ) -> OperationResponse:
+    if body.cancelled_by != operator.operator_id:
+        raise PermissionDeniedError(
+            "OP_PERMISSION_DENIED",
+            "取消人必须与当前登录身份一致",
+        )
+    await container.operation_service.authorize_access(operation_id, operator)
     return await container.operation_service.cancel(operation_id, body)
 
 
@@ -42,7 +77,19 @@ async def cancel_operation(
 async def get_operation(
     operation_id: str,
     request_id: str,
+    operator: OperatorDependency,
     container: ContainerDependency,
 ) -> OperationResponse:
+    await container.operation_service.authorize_access(operation_id, operator)
     return await container.operation_service.get_response(operation_id, request_id)
 
+
+@router.post("/{operation_id}/reconcile", response_model=OperationResponse)
+async def reconcile_operation(
+    operation_id: str,
+    request_id: str,
+    operator: OperatorDependency,
+    container: ContainerDependency,
+) -> OperationResponse:
+    await container.operation_service.authorize_access(operation_id, operator)
+    return await container.operation_service.reconcile(operation_id, request_id)

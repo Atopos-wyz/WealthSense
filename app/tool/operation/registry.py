@@ -32,6 +32,10 @@ class OperationToolRegistry:
         if idempotency_key in self.idempotency_results:
             return dict(self.idempotency_results[idempotency_key])
         if params.get("simulate_timeout"):
+            if params.get("eventual_success", True):
+                result = self._build_result(intent, operation_id, params)
+                self.results[operation_id] = dict(result)
+                self.idempotency_results[idempotency_key] = dict(result)
             raise MockOperationTimeout("mock API timeout")
         if params.get("simulate_failure"):
             raise MockOperationError(
@@ -44,7 +48,18 @@ class OperationToolRegistry:
         if amount is not None and Decimal(str(amount)) > Decimal("10000000"):
             raise MockOperationError("OP_LIMIT_EXCEEDED", "金额超过Mock接口限额")
 
-        result = {
+        result = self._build_result(intent, operation_id, params)
+        self.results[operation_id] = dict(result)
+        self.idempotency_results[idempotency_key] = dict(result)
+        return result
+
+    @staticmethod
+    def _build_result(
+        intent: OperationIntent,
+        operation_id: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "operation_id": operation_id,
             "action": intent.value,
             "status": "succeeded",
@@ -66,11 +81,8 @@ class OperationToolRegistry:
                 "status": "active",
                 "net_value": "1.0234",
             }
-        self.results[operation_id] = dict(result)
-        self.idempotency_results[idempotency_key] = dict(result)
         return result
 
     async def get_status(self, operation_id: str) -> dict[str, Any] | None:
         result = self.results.get(operation_id)
         return dict(result) if result else None
-

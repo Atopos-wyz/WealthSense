@@ -22,6 +22,7 @@ ALLOWED_TRANSITIONS: dict[OperationStatus, set[OperationStatus]] = {
         OperationStatus.WAITING_RISK_REVIEW,
     },
     OperationStatus.WAITING_RISK_REVIEW: {
+        OperationStatus.RESOLVING_ENTITIES,
         OperationStatus.RISK_APPROVED,
         OperationStatus.RISK_REJECTED,
         OperationStatus.RISK_REVIEW_TIMEOUT,
@@ -29,11 +30,13 @@ ALLOWED_TRANSITIONS: dict[OperationStatus, set[OperationStatus]] = {
         OperationStatus.CANCELLED,
     },
     OperationStatus.RISK_APPROVED: {
+        OperationStatus.RESOLVING_ENTITIES,
         OperationStatus.PENDING_CONFIRMATION,
         OperationStatus.EXECUTING,
         OperationStatus.CANCELLED,
     },
     OperationStatus.PENDING_CONFIRMATION: {
+        OperationStatus.RESOLVING_ENTITIES,
         OperationStatus.CONFIRMED,
         OperationStatus.CANCELLED,
         OperationStatus.EXPIRED,
@@ -84,4 +87,3 @@ def assert_transition(
         raise InvalidStateTransition(
             f"cannot transition from {current_status} to {target_status}"
         )
-

@@ -17,6 +17,9 @@ class OperatorContext(BaseModel):
     operator_id: str
     role: str
     organization_id: str = "ORG001"
+    allowed_customer_ids: set[str] = Field(default_factory=set)
+    allowed_account_ids: set[str] = Field(default_factory=set)
+    allowed_holding_ids: set[str] = Field(default_factory=set)
 
 
 class ChatOperationRequest(BaseModel):
@@ -42,6 +45,12 @@ class CancelOperationRequest(BaseModel):
     request_id: str
     cancelled_by: str
     reason: str = Field(min_length=1, max_length=500)
+
+
+class UpdateOperationRequest(BaseModel):
+    request_id: str
+    updated_by: str
+    params: dict[str, Any] = Field(min_length=1)
 
 
 class PurchaseParams(BaseModel):
@@ -136,6 +145,7 @@ class OperationResponse(BaseModel):
     intent: OperationIntent
     status: OperationStatus
     source_agent: AgentId
+    params_hash: str
     params: dict[str, Any] = Field(default_factory=dict)
     missing_fields: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
@@ -154,4 +164,3 @@ class OperationResponse(BaseModel):
             key: str(item) if isinstance(item, Decimal) else item
             for key, item in value.items()
         }
-

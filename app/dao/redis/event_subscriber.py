@@ -6,15 +6,21 @@ from redis.asyncio import Redis
 
 from app.event.channels import EventChannel
 from app.models.schemas.common import AgentEvent
+from app.utils.security import verify_agent_event
 
 logger = logging.getLogger(__name__)
 
-EventHandler = Callable[[AgentEvent], Awaitable[None]]
+EventHandler = Callable[[EventChannel, AgentEvent], Awaitable[None]]
 
 
 class RedisEventSubscriber:
-    def __init__(self, redis: Redis) -> None:
+    def __init__(
+        self,
+        redis: Redis,
+        hmac_secrets: dict[str, str],
+    ) -> None:
         self.redis = redis
+        self.hmac_secrets = hmac_secrets
         self._is_stopping = False
 
     async def listen(
@@ -35,7 +41,12 @@ class RedisEventSubscriber:
                     continue
                 try:
                     event = AgentEvent.model_validate_json(message["data"])
-                    await handler(event)
+                    verify_agent_event(
+                        event,
+                        self.hmac_secrets[event.source_agent.value],
+                    )
+                    channel = EventChannel(str(message["channel"]))
+                    await handler(channel, event)
                 except Exception:
                     logger.exception("failed to process agent event")
         finally:
@@ -44,4 +55,3 @@ class RedisEventSubscriber:
 
     def stop(self) -> None:
         self._is_stopping = True
-

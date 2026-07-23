@@ -1,4 +1,5 @@
 import json
+import time
 from copy import deepcopy
 from typing import Any, Protocol
 
@@ -20,6 +21,7 @@ class StateStore(Protocol):
 class InMemoryStateStore:
     def __init__(self) -> None:
         self.values: dict[str, dict[str, Any]] = {}
+        self.expires_at: dict[str, float] = {}
         self.locks: set[str] = set()
 
     async def put(
@@ -28,15 +30,19 @@ class InMemoryStateStore:
         value: dict[str, Any],
         ttl_seconds: int,
     ) -> None:
-        del ttl_seconds
         self.values[key] = deepcopy(value)
+        self.expires_at[key] = time.monotonic() + ttl_seconds
 
     async def get(self, key: str) -> dict[str, Any] | None:
+        if self.expires_at.get(key, 0) <= time.monotonic():
+            await self.delete(key)
+            return None
         value = self.values.get(key)
         return deepcopy(value) if value else None
 
     async def delete(self, key: str) -> None:
         self.values.pop(key, None)
+        self.expires_at.pop(key, None)
         self.locks.discard(key)
 
     async def acquire_lock(self, key: str, ttl_seconds: int) -> bool:
@@ -68,4 +74,3 @@ class RedisStateStore:
 
     async def acquire_lock(self, key: str, ttl_seconds: int) -> bool:
         return bool(await self.redis.set(key, "1", ex=ttl_seconds, nx=True))
-

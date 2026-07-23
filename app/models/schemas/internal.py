@@ -21,6 +21,7 @@ class OperationRecord:
     organization_id: str
     intent: OperationIntent
     status: OperationStatus
+    raw_message: str = ""
     version: int = 1
     task_id: str | None = None
     customer_id: str | None = None
@@ -30,6 +31,7 @@ class OperationRecord:
     missing_fields: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     confirmation_required: bool = False
+    confirmation_expires_at: datetime | None = None
     risk_request_event_id: str | None = None
     risk_result: dict[str, Any] | None = None
     result: dict[str, Any] | None = None
@@ -37,4 +39,3 @@ class OperationRecord:
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
     completed_at: datetime | None = None
-

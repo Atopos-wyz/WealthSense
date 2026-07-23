@@ -10,6 +10,15 @@ class Base(DeclarativeBase):
 
 class OperationEntity(Base):
     __tablename__ = "operations"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_agent",
+            "operator_id",
+            "organization_id",
+            "request_id",
+            name="uq_operation_source_request",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     operation_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -24,12 +33,16 @@ class OperationEntity(Base):
     customer_id: Mapped[str | None] = mapped_column(String(64), index=True)
     intent: Mapped[str] = mapped_column(String(64), index=True)
     status: Mapped[str] = mapped_column(String(64), index=True)
+    raw_message: Mapped[str] = mapped_column(Text)
     current_version: Mapped[int] = mapped_column(Integer, default=1)
     params_json: Mapped[dict] = mapped_column(JSON, default=dict)
     params_hash: Mapped[str] = mapped_column(String(64))
     missing_fields_json: Mapped[list] = mapped_column(JSON, default=list)
     warnings_json: Mapped[list] = mapped_column(JSON, default=list)
     confirmation_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    confirmation_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     risk_request_event_id: Mapped[str | None] = mapped_column(String(64), index=True)
     risk_result_json: Mapped[dict | None] = mapped_column(JSON)
     result_json: Mapped[dict | None] = mapped_column(JSON)
@@ -122,5 +135,21 @@ class ProcessedEventEntity(Base):
     event_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     event_type: Mapped[str] = mapped_column(String(64), index=True)
     source_agent: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(32), default="completed")
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
+
+class OutboxEventEntity(Base):
+    __tablename__ = "operator_outbox_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    channel: Mapped[str] = mapped_column(String(128), index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
