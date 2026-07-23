@@ -65,6 +65,27 @@ class Settings(BaseSettings):
 
     database_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
 
+    embedding_provider: Literal["bge", "hashing"] = "bge"
+    embedding_model: str = "BAAI/bge-large-zh-v1.5"
+    embedding_dimension: int = Field(default=1024, ge=1)
+    embedding_batch_size: int = Field(default=16, ge=1, le=128)
+
+    knowledge_chunk_size: int = Field(default=512, ge=64, le=8192)
+    knowledge_chunk_overlap: int = Field(default=64, ge=0, le=1024)
+    knowledge_search_min_score: float = Field(default=0.7, ge=0, le=1)
+
+    session_ttl_seconds: int = Field(default=1800, ge=60, le=86400)
+    session_max_messages: int = Field(default=20, ge=2, le=200)
+    session_token_budget: int = Field(default=4096, ge=256, le=32768)
+    nl2sql_cache_ttl_seconds: int = Field(default=600, ge=1, le=86400)
+    nl2sql_max_rows: int = Field(default=100, ge=1, le=1000)
+
+    llm_base_url: str | None = None
+    llm_api_key: SecretStr | None = None
+    llm_model: str = "qwen3.7-plus"
+    llm_enable_thinking: bool = False
+    llm_timeout_seconds: float = Field(default=30, gt=0, le=120)
+
     @field_validator(
         "mysql_password",
         "redis_password",
@@ -83,6 +104,8 @@ class Settings(BaseSettings):
         "neo4j_user",
         "neo4j_database",
         "milvus_database",
+        "embedding_model",
+        "llm_model",
     )
     @classmethod
     def validate_non_empty_text(cls, value: str) -> str:
@@ -105,6 +128,8 @@ class Settings(BaseSettings):
             and self.jwt_secret_key.get_secret_value() == DEFAULT_DEVELOPMENT_JWT_SECRET
         ):
             raise ValueError("生产环境必须配置 JWT_SECRET_KEY")
+        if self.knowledge_chunk_overlap >= self.knowledge_chunk_size:
+            raise ValueError("KNOWLEDGE_CHUNK_OVERLAP 必须小于 KNOWLEDGE_CHUNK_SIZE")
         return self
 
     @property
