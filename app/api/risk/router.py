@@ -2,11 +2,12 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import get_session
-from app.models.schemas.common import ApiResponse
+from app.models.error_codes import ErrorCode, get_error_definition
+from app.models.schemas import ApiResponse
 from app.models.schemas.risk import (
     AssessmentHistoryItem,
     AssessmentResult,
@@ -17,7 +18,8 @@ from app.models.schemas.risk import (
 )
 from app.service.risk.questionnaire import get_questionnaire
 from app.service.risk.risk_assessment_service import RiskAssessmentService
-from app.utils.response import success
+from app.utils.logger import get_trace_id
+from app.view.response import success_response
 
 
 router = APIRouter(prefix="/api/risk", tags=["风险评估"])
@@ -35,9 +37,8 @@ def get_risk_service(
     summary="获取16道风险评估问卷",
 )
 async def questionnaire(
-    request: Request,
 ) -> ApiResponse[QuestionnaireResponse]:
-    return success(request, get_questionnaire())
+    return success_response(get_questionnaire())
 
 
 @router.post(
@@ -47,10 +48,9 @@ async def questionnaire(
 )
 async def submit_assessment(
     payload: AssessmentSubmitRequest,
-    request: Request,
     service: Annotated[RiskAssessmentService, Depends(get_risk_service)],
 ) -> ApiResponse[AssessmentResult]:
-    return success(request, await service.submit(payload))
+    return success_response(await service.submit(payload))
 
 
 @router.get(
@@ -60,12 +60,10 @@ async def submit_assessment(
 )
 async def assessment_history(
     customer_id: int,
-    request: Request,
     service: Annotated[RiskAssessmentService, Depends(get_risk_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ApiResponse[list[AssessmentHistoryItem]]:
-    return success(
-        request,
+    return success_response(
         await service.history(customer_id, limit),
     )
 
@@ -77,18 +75,19 @@ async def assessment_history(
 )
 async def suitability_check(
     payload: SuitabilityCheckRequest,
-    request: Request,
     service: Annotated[RiskAssessmentService, Depends(get_risk_service)],
 ) -> ApiResponse[SuitabilityCheckResult]:
+    trace_id = get_trace_id()
     result = await service.suitability_check(
         payload,
-        request.state.trace_id,
+        trace_id,
     )
     if result.allowed:
-        return success(request, result)
+        return success_response(result, trace_id=trace_id)
+    definition = get_error_definition(ErrorCode.SUITABILITY_MISMATCH)
     return ApiResponse[SuitabilityCheckResult](
-        code=1005,
-        message="适当性不匹配",
+        code=definition.code,
+        message=definition.message,
         data=result,
-        trace_id=request.state.trace_id,
+        trace_id=trace_id,
     )

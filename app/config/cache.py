@@ -1,15 +1,12 @@
-"""Redis 异步客户端。"""
-
-from functools import lru_cache
+"""兼容画像缓存的 Redis 客户端入口。"""
 
 from redis.asyncio import Redis
 
-from app.config.settings import get_settings
+from app.dao import get_database_manager
 
 
-@lru_cache(maxsize=1)
 def get_redis_client() -> Redis | None:
-    redis_url = get_settings().redis_url
-    if not redis_url:
+    manager = get_database_manager()
+    if not manager.redis.connected:
         return None
-    return Redis.from_url(redis_url, decode_responses=True)
+    return manager.redis.client

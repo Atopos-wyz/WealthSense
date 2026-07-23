@@ -6,7 +6,13 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +30,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "WealthSense"
+    app_version: str = "0.1.0"
     app_env: Literal["development", "test", "production"] = "development"
     debug: bool = False
 
@@ -44,6 +51,8 @@ class Settings(BaseSettings):
     mysql_pool_size: int = Field(default=5, ge=1, le=100)
     mysql_max_overflow: int = Field(default=10, ge=0, le=200)
     mysql_pool_recycle_seconds: int = Field(default=1800, ge=60)
+    mysql_tunnel_port: int = Field(default=13306, ge=1, le=65535)
+    ssh_host: str | None = None
 
     redis_host: str = "127.0.0.1"
     redis_port: int = Field(default=6379, ge=1, le=65535)
@@ -60,7 +69,13 @@ class Settings(BaseSettings):
     milvus_host: str = "127.0.0.1"
     milvus_port: int = Field(default=19530, ge=1, le=65535)
     milvus_user: str = "root"
-    milvus_root_password: SecretStr
+    milvus_root_password: SecretStr = Field(
+        validation_alias=AliasChoices(
+            "milvus_root_password",
+            "MILVUS_ROOT_PASSWORD",
+            "MILVUS_PASSWORD",
+        )
+    )
     milvus_database: str = "default"
 
     database_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
@@ -110,6 +125,17 @@ class Settings(BaseSettings):
     @property
     def milvus_uri(self) -> str:
         return f"http://{self.milvus_host}:{self.milvus_port}"
+
+    @property
+    def mysql_connect_port(self) -> int:
+        """使用SSH云端配置时避开本机3306端口。"""
+
+        if (
+            self.ssh_host
+            and self.mysql_host in {"127.0.0.1", "localhost"}
+        ):
+            return self.mysql_tunnel_port
+        return self.mysql_port
 
 
 @lru_cache(maxsize=1)

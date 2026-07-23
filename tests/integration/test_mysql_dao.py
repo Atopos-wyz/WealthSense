@@ -13,6 +13,9 @@ from uuid import uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from app.config.settings import get_settings
+from app.dao.manager import DatabaseManager
+from app.dao.mysql.advisor_dao import AdvisorDAO
 from app.dao.mysql.cloud_init_schema import cloud_mysql_tunnel
 from app.dao.mysql.init_schema import get_database_url
 from app.dao.mysql.profile_dao import ProfileDAO
@@ -26,6 +29,11 @@ from app.dao.mysql.risk_assessment_dao import RiskAssessmentDAO
 class MysqlDaoIntegrationTest(unittest.IsolatedAsyncioTestCase):
     async def test_profile_and_risk_dao_sql(self) -> None:
         with cloud_mysql_tunnel() as port:
+            manager = DatabaseManager(get_settings())
+            await manager.mysql.connect()
+            self.assertTrue(await manager.mysql.health_check())
+            await manager.mysql.close()
+
             engine = create_async_engine(
                 get_database_url(False, port),
                 pool_pre_ping=False,
@@ -53,10 +61,14 @@ class MysqlDaoIntegrationTest(unittest.IsolatedAsyncioTestCase):
                             """
                             INSERT INTO fin_product (
                                 id, product_code, product_name,
-                                product_type, risk_level, status
+                                product_type, risk_level, expected_return,
+                                min_amount, term_days, fund_manager,
+                                industry, market, status
                             ) VALUES (
                                 :id, :code, '集成测试产品',
-                                '债券基金', 'R2', 'ACTIVE'
+                                '债券基金', 'R2', 3.8500,
+                                1000, 180, '测试经理',
+                                '金融', '中国', 'ACTIVE'
                             )
                             """
                         ),
@@ -68,6 +80,7 @@ class MysqlDaoIntegrationTest(unittest.IsolatedAsyncioTestCase):
 
                     profile_dao = ProfileDAO(session)
                     assessment_dao = RiskAssessmentDAO(session)
+                    advisor_dao = AdvisorDAO(session)
                     await profile_dao.upsert(
                         {
                             "customer_id": customer_id,
@@ -146,6 +159,19 @@ class MysqlDaoIntegrationTest(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNotNone(profile)
                     self.assertIsNotNone(latest)
                     self.assertEqual(profile["risk_level"], "C3")
+                    suitable_products = (
+                        await advisor_dao.list_suitable_products("C3")
+                    )
+                    matched = [
+                        product
+                        for product in suitable_products
+                        if product["id"] == product_id
+                    ]
+                    self.assertEqual(len(matched), 1)
+                    self.assertEqual(
+                        matched[0]["expected_return"],
+                        Decimal("3.8500"),
+                    )
                 finally:
                     await transaction.rollback()
             await engine.dispose()

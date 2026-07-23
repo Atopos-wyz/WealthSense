@@ -14,7 +14,11 @@ from dotenv import load_dotenv
 from sqlalchemy import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
-from app.dao.mysql.schema import CREATE_TABLE_STATEMENTS, create_profile_tables
+from app.dao.mysql.schema import (
+    CREATE_TABLE_STATEMENTS,
+    PRODUCT_COLUMN_MIGRATIONS,
+    create_profile_tables,
+)
 
 
 SUPPORTING_TABLES = frozenset({"sys_user", "fin_product"})
@@ -92,6 +96,31 @@ async def fetch_created_profile_tables(
     return tuple(row[0] for row in rows)
 
 
+async def migrate_product_columns(
+    connection: AsyncConnection,
+) -> tuple[str, ...]:
+    """查询实际列后，仅迁移旧版 fin_product 缺少的字段。"""
+
+    rows = (
+        await connection.exec_driver_sql(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = 'fin_product'
+            """
+        )
+    ).all()
+    existing_columns = {row[0] for row in rows}
+    migrated: list[str] = []
+    for column_name, statement in PRODUCT_COLUMN_MIGRATIONS.items():
+        if column_name in existing_columns:
+            continue
+        await connection.exec_driver_sql(statement)
+        migrated.append(column_name)
+    return tuple(migrated)
+
+
 def get_database_url(
     use_root: bool,
     port_override: int | None = None,
@@ -162,6 +191,7 @@ async def run(
 
         async with engine.begin() as connection:
             await create_profile_tables(connection.exec_driver_sql)
+            migrated_columns = await migrate_product_columns(connection)
 
         async with engine.connect() as connection:
             created_tables = await fetch_created_profile_tables(connection)
@@ -172,7 +202,12 @@ async def run(
             print(f"建表后仍缺少: {missing}")
             return 3
 
-        print(f"成功执行建表语句: {len(CREATE_TABLE_STATEMENTS)} 条")
+        print(
+            f"成功检查 {len(CREATE_TABLE_STATEMENTS)} 张表，"
+            f"新增 {len(migrated_columns)} 个产品字段"
+        )
+        if migrated_columns:
+            print("新增字段: " + ", ".join(migrated_columns))
         print("数据库中可见画像表:")
         for table_name in created_tables:
             print(f"- {table_name}")

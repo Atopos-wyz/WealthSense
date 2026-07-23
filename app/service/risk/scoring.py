@@ -4,8 +4,9 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from app.models.schemas.common import RiskLevel
 from app.models.schemas.risk import RiskAnswer, ScoredAnswer
+from app.models.error_codes import ErrorCode
 from app.service.risk.questionnaire import QUESTIONS
-from app.utils.exceptions import BusinessError
+from app.utils.exceptions import AppException
 
 
 RISK_LABELS: dict[RiskLevel, str] = {
@@ -49,8 +50,8 @@ def score_answers(
             detail.append(f"缺少题目: {missing}")
         if extra:
             detail.append(f"未知题目: {extra}")
-        raise BusinessError(
-            code=400,
+        raise AppException(
+            ErrorCode.INVALID_ARGUMENT,
             message="必须完整回答16道题" + (f"（{'；'.join(detail)}）" if detail else ""),
         )
 

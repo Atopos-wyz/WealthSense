@@ -2,15 +2,13 @@
 
 from enum import StrEnum
 from decimal import Decimal
-from typing import Generic, TypeVar
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import field_serializer
 
-
-T = TypeVar("T")
+from app.models.schemas.response import PublicSchema
 
 
-class DecimalJsonModel(BaseModel):
+class DecimalJsonModel(PublicSchema):
     """将 Decimal 以 JSON 数值返回，匹配接口文档示例。"""
 
     @field_serializer("*", when_used="json", check_fields=False)
@@ -49,16 +47,3 @@ SOURCE_CONFIDENCE: dict[DataSource, float] = {
     DataSource.AI_CONVERSATION: 0.60,
     DataSource.USER_DECLARED: 0.40,
 }
-
-
-class ApiResponse(BaseModel, Generic[T]):
-    code: int = 200
-    message: str = "success"
-    data: T | None = None
-    trace_id: str
-
-
-class Pagination(BaseModel):
-    page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=20, ge=1, le=100)
-    total: int = Field(ge=0)

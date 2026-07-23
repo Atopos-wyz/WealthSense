@@ -7,7 +7,7 @@ from app.models.schemas.common import RiskLevel
 from app.models.schemas.risk import RiskAnswer, RiskDimension
 from app.service.risk.questionnaire import QUESTIONS, get_questionnaire
 from app.service.risk.scoring import map_score_to_level, score_answers
-from app.utils.exceptions import BusinessError
+from app.utils.exceptions import AppException
 
 
 def answers(option: str) -> list[RiskAnswer]:
@@ -60,7 +60,7 @@ class RiskScoringTest(unittest.TestCase):
                 self.assertEqual(map_score_to_level(score), expected)
 
     def test_incomplete_answers_are_rejected(self) -> None:
-        with self.assertRaises(BusinessError) as context:
+        with self.assertRaises(AppException) as context:
             score_answers(answers("B")[:-1])
 
         self.assertIn("必须完整回答16道题", context.exception.message)

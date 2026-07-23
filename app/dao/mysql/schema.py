@@ -37,6 +37,12 @@ CREATE TABLE IF NOT EXISTS fin_product (
     product_name VARCHAR(128) NOT NULL COMMENT '产品名称',
     product_type VARCHAR(32) NOT NULL COMMENT '产品类型，用于资产配置聚合',
     risk_level VARCHAR(16) NULL COMMENT '产品风险等级',
+    expected_return DECIMAL(7,4) NULL COMMENT '预期年化收益率百分比',
+    min_amount DECIMAL(16,2) NOT NULL DEFAULT 0 COMMENT '起投金额',
+    term_days INT NOT NULL DEFAULT 0 COMMENT '产品期限，0表示活期',
+    fund_manager VARCHAR(64) NULL COMMENT '基金经理',
+    industry VARCHAR(64) NULL COMMENT '主要关联行业',
+    market VARCHAR(32) NULL COMMENT '主要关联市场',
     status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE' COMMENT '产品状态',
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -257,15 +263,58 @@ CREATE_TABLE_STATEMENTS: tuple[str, ...] = (
     FIN_SUITABILITY_CHECK_DDL,
 )
 
+PRODUCT_COLUMN_MIGRATIONS: dict[str, str] = {
+    "expected_return": """
+    ALTER TABLE fin_product
+    ADD COLUMN expected_return DECIMAL(7,4) NULL
+        COMMENT '预期年化收益率百分比'
+    """.strip(),
+    "min_amount": """
+    ALTER TABLE fin_product
+    ADD COLUMN min_amount DECIMAL(16,2) NOT NULL DEFAULT 0
+        COMMENT '起投金额'
+    """.strip(),
+    "term_days": """
+    ALTER TABLE fin_product
+    ADD COLUMN term_days INT NOT NULL DEFAULT 0
+        COMMENT '产品期限，0表示活期'
+    """.strip(),
+    "fund_manager": """
+    ALTER TABLE fin_product
+    ADD COLUMN fund_manager VARCHAR(64) NULL
+        COMMENT '基金经理'
+    """.strip(),
+    "industry": """
+    ALTER TABLE fin_product
+    ADD COLUMN industry VARCHAR(64) NULL
+        COMMENT '主要关联行业'
+    """.strip(),
+    "market": """
+    ALTER TABLE fin_product
+    ADD COLUMN market VARCHAR(32) NULL
+        COMMENT '主要关联市场'
+    """.strip(),
+}
+
+PRODUCT_SCHEMA_MIGRATION_STATEMENTS: tuple[str, ...] = tuple(
+    PRODUCT_COLUMN_MIGRATIONS.values()
+)
+
+ALL_SCHEMA_STATEMENTS: tuple[str, ...] = CREATE_TABLE_STATEMENTS
+
 
 def iter_create_table_statements() -> Iterator[str]:
-    """按依赖顺序返回客户画像域建表语句。"""
+    """按依赖顺序返回可重复执行的建表语句。"""
 
     yield from CREATE_TABLE_STATEMENTS
 
 
 def render_schema_sql() -> str:
-    """将全部建表语句渲染为可直接执行的 SQL 脚本。"""
+    """渲染新数据库可直接重复执行的建表脚本。
+
+    既有 ``fin_product`` 的列迁移需先检查 information_schema，由
+    ``app.dao.mysql.init_schema`` 安全执行。
+    """
 
     return "\n\n".join(CREATE_TABLE_STATEMENTS) + "\n"
 

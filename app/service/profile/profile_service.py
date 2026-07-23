@@ -10,11 +10,14 @@ from app.dao.mysql.risk_assessment_dao import RiskAssessmentDAO
 from app.dao.mysql.user_dao import UserDAO
 from app.dao.redis.profile_cache_dao import ProfileCacheDAO
 from app.config.cache import get_redis_client
+from app.event.publisher import RedisEventPublisher
 from app.models.schemas.common import (
     SOURCE_CONFIDENCE,
     DataSource,
     RiskLevel,
 )
+from app.models.error_codes import ErrorCode
+from app.models.schemas.event import AgentEvent, AgentEventType, AgentType
 from app.models.schemas.profile import (
     FieldUpdateResult,
     ProfileCreateRequest,
@@ -29,7 +32,12 @@ from app.service.profile.score_engine import (
     evaluate_profile,
     investment_experience_range,
 )
-from app.utils.exceptions import BusinessError
+from app.utils.exceptions import (
+    AppException,
+    ConflictError,
+    ResourceNotFoundError,
+)
+from app.utils.logger import get_trace_id
 
 
 FIELD_AUTHORITIES: dict[str, frozenset[DataSource]] = {
@@ -44,23 +52,29 @@ FIELD_AUTHORITIES: dict[str, frozenset[DataSource]] = {
 
 
 class ProfileService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        event_publisher: RedisEventPublisher | None = None,
+    ) -> None:
         self.session = session
         self.user_dao = UserDAO(session)
         self.profile_dao = ProfileDAO(session)
         self.assessment_dao = RiskAssessmentDAO(session)
         self.cache_dao = ProfileCacheDAO(get_redis_client())
+        self.event_publisher = event_publisher or RedisEventPublisher()
 
     async def create(self, request: ProfileCreateRequest) -> ProfileResponse:
         if not await self.user_dao.exists(request.customer_id):
-            raise BusinessError(404, "客户不存在", 404)
+            raise ResourceNotFoundError("客户")
 
         existing_evaluation = await self.profile_dao.get_evaluation_by_trigger(
             request.trigger_id
         )
         if existing_evaluation is not None:
             if existing_evaluation["customer_id"] != request.customer_id:
-                raise BusinessError(400, "trigger_id已被其他客户使用")
+                raise ConflictError("trigger_id已被其他客户使用")
             return await self.get(request.customer_id)
 
         assessment = await self.assessment_dao.get_latest(
@@ -74,7 +88,10 @@ class ProfileService:
                 if latest is not None
                 else "创建画像前必须先完成风险评估"
             )
-            raise BusinessError(400, message)
+            raise AppException(
+                ErrorCode.INVALID_ARGUMENT,
+                message=message,
+            )
 
         score = evaluate_profile(
             facts=request.facts,
@@ -156,7 +173,20 @@ class ProfileService:
 
         await self.session.commit()
         await self.cache_dao.delete(request.customer_id)
-        return await self.get(request.customer_id)
+        response = await self.get(request.customer_id)
+        await self._publish_profile_updated(
+            customer_id=request.customer_id,
+            trigger_id=request.trigger_id,
+            changed_fields=[
+                "risk_level",
+                "investment_experience",
+                "annual_income_range",
+                "total_assets",
+                "asset_allocation",
+                "product_preference",
+            ],
+        )
+        return response
 
     async def get(self, customer_id: int) -> ProfileResponse:
         cached = await self.cache_dao.get(customer_id)
@@ -164,7 +194,7 @@ class ProfileService:
             return ProfileResponse.model_validate(cached)
         profile = await self.profile_dao.get(customer_id)
         if profile is None:
-            raise BusinessError(404, "客户画像不存在", 404)
+            raise ResourceNotFoundError("客户画像")
         response = ProfileResponse.model_validate(profile)
         await self.cache_dao.set(
             customer_id,
@@ -179,7 +209,7 @@ class ProfileService:
     ) -> ProfileUpdateResult:
         current = await self.profile_dao.get(customer_id)
         if current is None:
-            raise BusinessError(404, "客户画像不存在", 404)
+            raise ResourceNotFoundError("客户画像")
 
         incoming_fields = request.model_dump(
             exclude={"source", "trigger_id"},
@@ -260,10 +290,20 @@ class ProfileService:
 
         await self.session.commit()
         await self.cache_dao.delete(customer_id)
-        return ProfileUpdateResult(
+        result = ProfileUpdateResult(
             profile=await self.get(customer_id),
             fields=field_results,
         )
+        await self._publish_profile_updated(
+            customer_id=customer_id,
+            trigger_id=request.trigger_id,
+            changed_fields=[
+                field.field_name
+                for field in field_results
+                if field.resolution == "APPLIED"
+            ],
+        )
+        return result
 
     async def latest_evaluation(
         self,
@@ -271,7 +311,7 @@ class ProfileService:
     ) -> ProfileEvaluationResponse:
         evaluation = await self.profile_dao.get_latest_evaluation(customer_id)
         if evaluation is None:
-            raise BusinessError(404, "客户画像评估记录不存在", 404)
+            raise ResourceNotFoundError("客户画像评估记录")
         return ProfileEvaluationResponse.model_validate(evaluation)
 
     async def evaluation_history(
@@ -284,3 +324,29 @@ class ProfileService:
             ProfileEvaluationResponse.model_validate(row)
             for row in rows
         ]
+
+    async def _publish_profile_updated(
+        self,
+        *,
+        customer_id: int,
+        trigger_id: str,
+        changed_fields: list[str],
+    ) -> None:
+        await self.event_publisher.publish(
+            AgentEvent(
+                event_type=AgentEventType.PROFILE_UPDATED,
+                source_agent=AgentType.SYSTEM,
+                target_agents=[AgentType.ADVISOR, AgentType.RISK],
+                payload={
+                    "changed_fields": changed_fields,
+                    "trigger_id": trigger_id,
+                },
+                trace_id=get_trace_id(),
+                customer_id=customer_id,
+                correlation_id=trigger_id,
+                deduplication_key=(
+                    f"{AgentEventType.PROFILE_UPDATED.value}:"
+                    f"{trigger_id}"
+                ),
+            )
+        )

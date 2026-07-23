@@ -6,6 +6,7 @@ from app.dao.mysql.schema import (
     CREATE_TABLE_STATEMENTS,
     FIN_CUSTOMER_PROFILE_DDL,
     FIN_PROFILE_EVALUATION_DDL,
+    PRODUCT_SCHEMA_MIGRATION_STATEMENTS,
     render_schema_sql,
 )
 
@@ -54,6 +55,14 @@ class MysqlSchemaTest(unittest.TestCase):
 
         self.assertTrue(sql.endswith("\n"))
         self.assertEqual(sql.count("CREATE TABLE IF NOT EXISTS"), 8)
+        self.assertNotIn("ADD COLUMN", sql)
+        self.assertEqual(len(PRODUCT_SCHEMA_MIGRATION_STATEMENTS), 6)
+        self.assertTrue(
+            all(
+                "ADD COLUMN" in statement
+                for statement in PRODUCT_SCHEMA_MIGRATION_STATEMENTS
+            )
+        )
 
 
 if __name__ == "__main__":

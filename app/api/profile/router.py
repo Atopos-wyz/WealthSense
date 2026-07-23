@@ -2,11 +2,11 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import get_session
-from app.models.schemas.common import ApiResponse
+from app.models.schemas import ApiResponse
 from app.models.schemas.profile import (
     ProfileCreateRequest,
     ProfileEvaluationResponse,
@@ -22,7 +22,7 @@ from app.models.schemas.risk import (
 )
 from app.service.profile.profile_service import ProfileService
 from app.service.risk.risk_assessment_service import RiskAssessmentService
-from app.utils.response import success
+from app.view.response import success_response
 
 
 router = APIRouter(prefix="/api/profile", tags=["客户画像"])
@@ -47,10 +47,9 @@ def get_risk_service(
 )
 async def create_profile(
     payload: ProfileCreateRequest,
-    request: Request,
     service: Annotated[ProfileService, Depends(get_profile_service)],
 ) -> ApiResponse[ProfileResponse]:
-    return success(request, await service.create(payload))
+    return success_response(await service.create(payload))
 
 
 @router.get(
@@ -60,10 +59,9 @@ async def create_profile(
 )
 async def get_profile(
     customer_id: int,
-    request: Request,
     service: Annotated[ProfileService, Depends(get_profile_service)],
 ) -> ApiResponse[ProfileResponse]:
-    return success(request, await service.get(customer_id))
+    return success_response(await service.get(customer_id))
 
 
 @router.put(
@@ -74,11 +72,9 @@ async def get_profile(
 async def update_profile(
     customer_id: int,
     payload: ProfileUpdateRequest,
-    request: Request,
     service: Annotated[ProfileService, Depends(get_profile_service)],
 ) -> ApiResponse[ProfileUpdateResult]:
-    return success(
-        request,
+    return success_response(
         await service.update(customer_id, payload),
     )
 
@@ -90,11 +86,9 @@ async def update_profile(
 )
 async def latest_profile_evaluation(
     customer_id: int,
-    request: Request,
     service: Annotated[ProfileService, Depends(get_profile_service)],
 ) -> ApiResponse[ProfileEvaluationResponse]:
-    return success(
-        request,
+    return success_response(
         await service.latest_evaluation(customer_id),
     )
 
@@ -106,12 +100,10 @@ async def latest_profile_evaluation(
 )
 async def profile_evaluation_history(
     customer_id: int,
-    request: Request,
     service: Annotated[ProfileService, Depends(get_profile_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ApiResponse[list[ProfileEvaluationResponse]]:
-    return success(
-        request,
+    return success_response(
         await service.evaluation_history(customer_id, limit),
     )
 
@@ -124,7 +116,6 @@ async def profile_evaluation_history(
 async def submit_customer_assessment(
     customer_id: int,
     payload: AssessmentAnswersRequest,
-    request: Request,
     service: Annotated[RiskAssessmentService, Depends(get_risk_service)],
 ) -> ApiResponse[AssessmentResult]:
     submit_request = AssessmentSubmitRequest(
@@ -132,7 +123,7 @@ async def submit_customer_assessment(
         answers=payload.answers,
         assessor_type=payload.assessor_type,
     )
-    return success(request, await service.submit(submit_request))
+    return success_response(await service.submit(submit_request))
 
 
 @router.get(
@@ -142,11 +133,9 @@ async def submit_customer_assessment(
 )
 async def customer_assessment_history(
     customer_id: int,
-    request: Request,
     service: Annotated[RiskAssessmentService, Depends(get_risk_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ApiResponse[list[AssessmentHistoryItem]]:
-    return success(
-        request,
+    return success_response(
         await service.history(customer_id, limit),
     )

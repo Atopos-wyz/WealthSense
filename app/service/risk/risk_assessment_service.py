@@ -11,7 +11,10 @@ from app.dao.mysql.risk_assessment_dao import RiskAssessmentDAO
 from app.dao.mysql.user_dao import UserDAO
 from app.dao.redis.profile_cache_dao import ProfileCacheDAO
 from app.config.cache import get_redis_client
+from app.event.publisher import RedisEventPublisher
 from app.models.schemas.common import RiskLevel
+from app.models.error_codes import ErrorCode
+from app.models.schemas.event import AgentEvent, AgentEventType, AgentType
 from app.models.schemas.profile import ProfileFacts
 from app.models.schemas.risk import (
     AssessmentHistoryItem,
@@ -26,23 +29,30 @@ from app.service.risk.scoring import (
     score_answers,
 )
 from app.service.profile.score_engine import RULE_VERSION, evaluate_profile
-from app.utils.exceptions import BusinessError
+from app.utils.exceptions import AppException, ResourceNotFoundError
+from app.utils.logger import get_trace_id
 
 
 class RiskAssessmentService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        event_publisher: RedisEventPublisher | None = None,
+    ) -> None:
         self.session = session
         self.user_dao = UserDAO(session)
         self.profile_dao = ProfileDAO(session)
         self.assessment_dao = RiskAssessmentDAO(session)
         self.cache_dao = ProfileCacheDAO(get_redis_client())
+        self.event_publisher = event_publisher or RedisEventPublisher()
 
     async def submit(
         self,
         request: AssessmentSubmitRequest,
     ) -> AssessmentResult:
         if not await self.user_dao.exists(request.customer_id):
-            raise BusinessError(404, "客户不存在", 404)
+            raise ResourceNotFoundError("客户")
 
         total_score, official_level, scored_answers = score_answers(
             request.answers
@@ -115,7 +125,7 @@ class RiskAssessmentService:
         )
         await self.session.commit()
         await self.cache_dao.delete(request.customer_id)
-        return AssessmentResult(
+        result = AssessmentResult(
             assessment_id=assessment_id,
             assessment_no=assessment_no,
             customer_id=request.customer_id,
@@ -127,6 +137,28 @@ class RiskAssessmentService:
             valid_until=valid_until,
             confidence_score=Decimal("0.90"),
         )
+        await self.event_publisher.publish(
+            AgentEvent(
+                event_type=AgentEventType.ASSESSMENT_COMPLETED,
+                source_agent=AgentType.RISK,
+                target_agents=[AgentType.ADVISOR, AgentType.CUSTOMER],
+                payload={
+                    "assessment_id": assessment_id,
+                    "assessment_no": assessment_no,
+                    "risk_level": official_level.value,
+                    "effective_risk_level": effective_level.value,
+                    "valid_until": valid_until.isoformat(),
+                },
+                trace_id=get_trace_id(),
+                customer_id=request.customer_id,
+                correlation_id=assessment_no,
+                deduplication_key=(
+                    f"{AgentEventType.ASSESSMENT_COMPLETED.value}:"
+                    f"{assessment_no}"
+                ),
+            )
+        )
+        return result
 
     async def history(
         self,
@@ -155,12 +187,15 @@ class RiskAssessmentService:
     ) -> SuitabilityCheckResult:
         profile = await self.profile_dao.get(request.customer_id)
         if profile is None or profile["risk_level"] is None:
-            raise BusinessError(404, "客户画像或风险等级不存在", 404)
+            raise ResourceNotFoundError("客户画像或风险等级")
         product = await self.assessment_dao.get_product(request.product_id)
         if product is None:
-            raise BusinessError(404, "产品不存在", 404)
+            raise ResourceNotFoundError("产品")
         if product["risk_level"] not in {f"R{i}" for i in range(1, 6)}:
-            raise BusinessError(400, "产品风险等级配置不合法")
+            raise AppException(
+                ErrorCode.INVALID_ARGUMENT,
+                message="产品风险等级配置不合法",
+            )
 
         customer_level = RiskLevel(profile["risk_level"])
         maximum_rank = int(customer_level[1])

@@ -4,6 +4,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
+from app.api.risk.router import get_risk_service
 from app.main import app
 
 
@@ -38,14 +39,18 @@ class ApiContractTest(unittest.TestCase):
         )
 
     def test_invalid_assessment_request_uses_unified_error(self) -> None:
-        response = self.client.post(
-            "/api/risk/assessment",
-            json={"customer_id": 0, "answers": []},
-        )
+        app.dependency_overrides[get_risk_service] = lambda: object()
+        try:
+            response = self.client.post(
+                "/api/risk/assessment",
+                json={"customer_id": 0, "answers": []},
+            )
+        finally:
+            app.dependency_overrides.pop(get_risk_service, None)
 
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.status_code, 400)
         body = response.json()
         self.assertEqual(body["code"], 400)
-        self.assertEqual(body["message"], "请求参数校验失败")
-        self.assertIsInstance(body["data"], list)
+        self.assertEqual(body["message"], "请求参数错误")
+        self.assertIsInstance(body["data"]["details"], list)
         self.assertTrue(body["trace_id"])
