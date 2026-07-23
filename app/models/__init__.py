@@ -1,4 +1,4 @@
-"""共享数据模型与错误定义。"""
+"""Shared data models, schemas, and error definitions."""
 
 from app.models.error_codes import ErrorCode, ErrorDefinition, get_error_definition
 

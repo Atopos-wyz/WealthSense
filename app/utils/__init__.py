@@ -1,4 +1,4 @@
-"""跨模块基础设施工具。"""
+"""Cross-module infrastructure utilities."""
 
 from app.utils.exceptions import AppException
 from app.utils.logger import configure_logging, get_logger, get_trace_id

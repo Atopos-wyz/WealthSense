@@ -1,9 +1,12 @@
-fastapi==0.116.1
+fastapi==0.139.0
+uvicorn==0.51.0
 pydantic==2.13.4
-pydantic-settings==2.10.1
-SQLAlchemy[asyncio]==2.0.41
+pydantic-settings==2.14.2
+SQLAlchemy[asyncio]==2.0.51
 aiomysql==0.3.2
 redis==8.0.1
 neo4j==6.2.0
 pymilvus>=2.6,<3.1
 PyJWT==2.13.0
+httpx==0.28.1
+paramiko==3.5.1
