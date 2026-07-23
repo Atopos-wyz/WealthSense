@@ -1,4 +1,4 @@
-"""应用配置。"""
+"""Application configuration."""
 
 from app.config.settings import Settings, clear_settings_cache, get_settings
 

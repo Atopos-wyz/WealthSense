@@ -52,13 +52,15 @@ class MySQLConnectionManager:
                 username=self._settings.mysql_user,
                 password=self._settings.mysql_password.get_secret_value(),
                 host=self._settings.mysql_host,
-                port=self._settings.mysql_port,
+                port=self._settings.mysql_connect_port,
                 database=self._settings.mysql_database,
                 query={"charset": "utf8mb4"},
             )
             engine = create_async_engine(
                 url,
-                pool_pre_ping=True,
+                # health_check() 已显式执行 SELECT 1；关闭驱动层预检，
+                # 避免 aiomysql 的 ping(reconnect) 签名兼容问题。
+                pool_pre_ping=False,
                 pool_size=self._settings.mysql_pool_size,
                 max_overflow=self._settings.mysql_max_overflow,
                 pool_recycle=self._settings.mysql_pool_recycle_seconds,

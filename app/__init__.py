@@ -1,1 +1,1 @@
-"""WealthSense 应用程序包。"""
+"""WealthSense application package."""
