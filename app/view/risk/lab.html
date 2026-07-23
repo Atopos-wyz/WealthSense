@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WealthSense · 风控联调台</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #fff;
+      --ink: #1a2332;
+      --muted: #5c6b7a;
+      --line: #d8dee6;
+      --accent: #0b6e4f;
+      --accent-soft: #e6f4ef;
+      --danger: #b42318;
+      --warn: #b54708;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    header {
+      background: linear-gradient(120deg, #0b6e4f 0%, #163a4a 100%);
+      color: #fff;
+      padding: 1rem 1.25rem;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; font-weight: 650; }
+    header p {
+      margin: 0.35rem 0 0;
+      opacity: 0.9;
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: 1rem;
+      padding: 1rem;
+      max-width: min(1280px, 100%);
+      width: 100%;
+      margin: 0 auto;
+    }
+    @media (max-width: 960px) {
+      main { grid-template-columns: minmax(0, 1fr); }
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .card h2 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 0.45rem;
+    }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    input[type="text"], select, textarea {
+      width: 100%;
+      max-width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0.5rem 0.6rem;
+      font: inherit;
+      background: #fff;
+    }
+    input[type="text"] {
+      overflow-x: auto;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    textarea {
+      min-height: 200px;
+      max-height: 280px;
+      resize: vertical;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.82rem;
+      overflow: auto;
+      white-space: pre;
+      overflow-wrap: normal;
+      word-break: normal;
+    }
+    .row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: end;
+      margin-bottom: 0.65rem;
+      min-width: 0;
+    }
+    .row > * { flex: 1 1 120px; min-width: 0; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-top: 0.5rem; }
+    button {
+      border: 0;
+      border-radius: 6px;
+      padding: 0.45rem 0.85rem;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.secondary { background: #334155; }
+    button.ghost { background: #e8eef3; color: var(--ink); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    pre {
+      margin: 0;
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 0.75rem;
+      overflow: auto;
+      max-height: 340px;
+      max-width: 100%;
+      width: 100%;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .status {
+      font-size: 0.85rem;
+      margin: 0.4rem 0 0.6rem;
+      padding: 0.4rem 0.55rem;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      color: #0b4d3a;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .status.err { background: #fee4e2; color: var(--danger); }
+    .status.warn { background: #ffead5; color: var(--warn); }
+    .hint { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; }
+    .table-wrap { margin-top: 0.6rem; overflow-x: auto; max-width: 100%; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: fixed; }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 0.4rem 0.3rem;
+      text-align: left;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover { background: #f0f7f4; }
+    tr.selected { background: var(--accent-soft); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>WealthSense · 风控联调台</h1>
+    <p>同一服务测 token / monitor / 预警查询与处置 / 广播事件 · 打开本页即可，无需 Postman</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>1. 鉴权与场景</h2>
+      <div class="row">
+        <div>
+          <label>Bearer Token</label>
+          <input id="token" type="text" placeholder="点击「获取 Token」或粘贴 JWT" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btnToken">获取 Token</button>
+        <button type="button" class="ghost" id="btnClearToken">清空 Token</button>
+      </div>
+      <div class="row" style="margin-top:0.8rem">
+        <div>
+          <label>演示场景</label>
+          <select id="scenario"></select>
+        </div>
+      </div>
+      <label>请求体 JSON（可改）</label>
+      <textarea id="payload"></textarea>
+      <div class="actions">
+        <button type="button" id="btnMonitor">提交监测</button>
+        <button type="button" class="secondary" id="btnFillScenario">重新填充场景</button>
+      </div>
+      <p class="hint">默认场景对齐 RW 演示 fixture；改 JSON 后直接提交即可。</p>
+      <div id="status" class="status" hidden></div>
+    </section>
+
+    <section class="card">
+      <h2>2. 监测结果</h2>
+      <pre id="monitorOut">等待提交…</pre>
+    </section>
+
+    <section class="card">
+      <h2>3. 预警列表与处置</h2>
+      <div class="row">
+        <div>
+          <label>customer_id</label>
+          <input id="customerId" type="text" value="DEMO-SANCTION-01" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btnList">查询预警</button>
+        <button type="button" class="secondary" id="btnConfirm" disabled>处置：已确认</button>
+        <button type="button" class="ghost" id="btnExclude" disabled>处置：已排除</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>级别</th>
+              <th>类型</th>
+              <th>状态</th>
+              <th>广播</th>
+            </tr>
+          </thead>
+          <tbody id="alertBody">
+            <tr><td colspan="5">暂无数据</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <pre id="alertOut" style="margin-top:0.6rem; max-height:180px">选中一行查看详情</pre>
+    </section>
+
+    <section class="card">
+      <h2>4. 广播事件（内存总线）</h2>
+      <div class="actions">
+        <button type="button" id="btnEvents">刷新 last-events</button>
+        <button type="button" class="secondary" id="btnRedis">检查 Redis 状态</button>
+      </div>
+      <pre id="eventsOut" style="margin-top:0.6rem">点击刷新…</pre>
+    </section>
+  </main>
+
+  <script>
+    const SCENARIOS = {
+      sanction_country: {
+        label: "制裁/高风险地区 · RW-011（默认）",
+        body: {
+          customer_id: "DEMO-SANCTION-01",
+          amount: 15000,
+          currency: "CNY",
+          counterparty_country: "IR",
+          trade_type: "import",
+          extra: { scenario: "sanction_country", remark: "演示高风险国家往来" }
+        }
+      },
+      pep_overseas: {
+        label: "PEP 境外对手 · RW-013",
+        body: {
+          customer_id: "DEMO-PEP-01",
+          amount: 80000,
+          currency: "CNY",
+          is_pep: true,
+          has_new_overseas_counterparty: true,
+          extra: { scenario: "pep_overseas" }
+        }
+      },
+      multi_rule_combo: {
+        label: "双命中 RW-011+013",
+        body: {
+          customer_id: "DEMO-COMBO-01",
+          amount: 250000,
+          currency: "CNY",
+          counterparty_country: "KP",
+          is_pep: true,
+          has_new_overseas_counterparty: true,
+          extra: { scenario: "multi_rule_combo" }
+        }
+      },
+      gambling_pattern: {
+        label: "涉赌涉诈 · RW-019",
+        body: {
+          customer_id: "DEMO-GAMBLE-01",
+          amount: 50000,
+          currency: "CNY",
+          gambling_inbound_small: true,
+          gambling_outbound_large_integer: true,
+          gambling_inbound_night: true,
+          extra: { scenario: "gambling_pattern" }
+        }
+      },
+      fund_aggregation: {
+        label: "分散转入集中转出 · RW-004",
+        body: {
+          customer_id: "DEMO-AGG-01",
+          amount: 5000,
+          currency: "CNY",
+          distinct_in_sources_5d: 5,
+          outbound_amount_5d: 200000,
+          outbound_concentration: 0.85,
+          extra: { scenario: "fund_aggregation" }
+        }
+      },
+      clean_with_audit: {
+        label: "无命中 + 已检无风险审计",
+        body: {
+          customer_id: "DEMO-CLEAN-01",
+          amount: 3000,
+          currency: "CNY",
+          counterparty_country: "US",
+          force_audit: true,
+          extra: { scenario: "clean_with_audit" }
+        }
+      }
+    };
+
+    const els = {
+      token: document.getElementById("token"),
+      scenario: document.getElementById("scenario"),
+      payload: document.getElementById("payload"),
+      status: document.getElementById("status"),
+      monitorOut: document.getElementById("monitorOut"),
+      customerId: document.getElementById("customerId"),
+      alertBody: document.getElementById("alertBody"),
+      alertOut: document.getElementById("alertOut"),
+      eventsOut: document.getElementById("eventsOut"),
+      btnConfirm: document.getElementById("btnConfirm"),
+      btnExclude: document.getElementById("btnExclude"),
+    };
+
+    let selectedAlertId = null;
+
+    function setStatus(msg, type = "") {
+      els.status.hidden = !msg;
+      els.status.textContent = msg || "";
+      els.status.className = "status" + (type ? " " + type : "");
+    }
+
+    function authHeaders() {
+      const token = els.token.value.trim();
+      if (!token) throw new Error("请先获取或填写 Token");
+      return {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      };
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, options);
+      let data = null;
+      try { data = await res.json(); } catch (_) { data = null; }
+      if (!res.ok) {
+        const msg = (data && (data.message || data.detail)) || ("HTTP " + res.status);
+        throw new Error(msg);
+      }
+      return data;
+    }
+
+    function fillScenario(name) {
+      const sc = SCENARIOS[name];
+      if (!sc) return;
+      els.payload.value = JSON.stringify(sc.body, null, 2);
+      els.customerId.value = sc.body.customer_id || "";
+    }
+
+    function initScenarios() {
+      Object.entries(SCENARIOS).forEach(([key, val]) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = val.label;
+        els.scenario.appendChild(opt);
+      });
+      els.scenario.value = "sanction_country";
+      fillScenario("sanction_country");
+    }
+
+    function renderAlerts(items) {
+      if (!items || !items.length) {
+        els.alertBody.innerHTML = "<tr><td colspan='5'>暂无数据</td></tr>";
+        selectedAlertId = null;
+        els.btnConfirm.disabled = true;
+        els.btnExclude.disabled = true;
+        return;
+      }
+      els.alertBody.innerHTML = items.map((item) => {
+        const id = item.alert_id;
+        const selected = id === selectedAlertId ? " selected" : "";
+        return `<tr class="clickable${selected}" data-id="${id}">
+          <td>${id}</td>
+          <td>${item.alert_level ?? "-"}</td>
+          <td>${item.record_type ?? "-"}</td>
+          <td>${item.status ?? "-"}</td>
+          <td>${item.broadcasted ? "是" : "否"}</td>
+        </tr>`;
+      }).join("");
+
+      els.alertBody.querySelectorAll("tr.clickable").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          selectedAlertId = Number(tr.dataset.id);
+          const found = items.find((x) => x.alert_id === selectedAlertId);
+          els.alertOut.textContent = JSON.stringify(found, null, 2);
+          els.btnConfirm.disabled = false;
+          els.btnExclude.disabled = false;
+          renderAlerts(items);
+        });
+      });
+    }
+
+    document.getElementById("btnToken").addEventListener("click", async () => {
+      try {
+        setStatus("正在获取 Token…");
+        const data = await api("/api/risk/dev/token", { method: "POST" });
+        const token = data?.data?.token;
+        if (!token) throw new Error(data?.data?.message || "未返回 token");
+        els.token.value = token;
+        setStatus("Token 已填入，可开始监测");
+      } catch (e) {
+        setStatus(e.message, "err");
+      }
+    });
+
+    document.getElementById("btnClearToken").addEventListener("click", () => {
+      els.token.value = "";
+      setStatus("Token 已清空", "warn");
+    });
+
+    els.scenario.addEventListener("change", () => fillScenario(els.scenario.value));
+    document.getElementById("btnFillScenario").addEventListener("click", () => {
+      fillScenario(els.scenario.value);
+      setStatus("已重新填充场景 JSON");
+    });
+
+    document.getElementById("btnMonitor").addEventListener("click", async () => {
+      try {
+        let body;
+        try {
+          body = JSON.parse(els.payload.value);
+        } catch (_) {
+          throw new Error("请求体不是合法 JSON");
+        }
+        setStatus("监测中…");
+        const data = await api("/api/risk/monitor", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify(body),
+        });
+        els.monitorOut.textContent = JSON.stringify(data, null, 2);
+        if (body.customer_id) els.customerId.value = body.customer_id;
+        const hit = data?.data?.hit;
+        const level = data?.data?.alert_level;
+        setStatus(
+          hit
+            ? `命中 · 级别 ${level} · alert_id=${data.data.alert_id} · broadcasted=${data.data.broadcasted} · redis_published=${data.data.redis_published}`
+            : `未命中 · confidence=${data?.data?.confidence} · skip_full=${data?.data?.skip_full}`
+        );
+        if (data?.data?.redis_error) {
+          setStatus(
+            `内存已广播，但 Redis 失败: ${data.data.redis_error}`,
+            "warn"
+          );
+        }
+      } catch (e) {
+        setStatus(e.message, "err");
+        els.monitorOut.textContent = e.message;
+      }
+    });
+
+    document.getElementById("btnList").addEventListener("click", async () => {
+      try {
+        const cid = els.customerId.value.trim();
+        if (!cid) throw new Error("请填写 customer_id");
+        const data = await api("/api/risk/alerts?customer_id=" + encodeURIComponent(cid), {
+          headers: authHeaders(),
+        });
+        const items = data?.data || [];
+        renderAlerts(items);
+        setStatus(`查询到 ${items.length} 条预警`);
+      } catch (e) {
+        setStatus(e.message, "err");
+      }
+    });
+
+    async function handle(status) {
+      try {
+        if (!selectedAlertId) throw new Error("请先选中一条预警");
+        const data = await api(`/api/risk/alerts/${selectedAlertId}/handle`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ status }),
+        });
+        els.alertOut.textContent = JSON.stringify(data, null, 2);
+        setStatus(`已处置为「${status}」`);
+        document.getElementById("btnList").click();
+      } catch (e) {
+        setStatus(e.message, "err");
+      }
+    }
+
+    els.btnConfirm.addEventListener("click", () => handle("已确认"));
+    els.btnExclude.addEventListener("click", () => handle("已排除"));
+
+    document.getElementById("btnEvents").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/risk/dev/last-events", { headers: authHeaders() });
+        els.eventsOut.textContent = JSON.stringify(data, null, 2);
+        setStatus(`事件条数：${(data?.data || []).length}`);
+      } catch (e) {
+        setStatus(e.message, "err");
+        els.eventsOut.textContent = e.message;
+      }
+    });
+
+    document.getElementById("btnRedis").addEventListener("click", async () => {
+      try {
+        const data = await api("/api/risk/dev/redis-status", { headers: authHeaders() });
+        els.eventsOut.textContent = JSON.stringify(data, null, 2);
+        const ok = data?.data?.ping_ok;
+        setStatus(
+          ok ? "Redis ping 成功，可 SUBSCRIBE event:risk_alert" : "Redis ping 失败，见右侧详情",
+          ok ? "" : "err"
+        );
+      } catch (e) {
+        setStatus(e.message, "err");
+        els.eventsOut.textContent = e.message;
+      }
+    });
+
+    initScenarios();
+  </script>
+</body>
+</html>

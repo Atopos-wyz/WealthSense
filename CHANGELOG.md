@@ -6,6 +6,26 @@
 
 ### 新增
 
+#### 风控监测阶段 1（AML 竖切）
+
+- 新增 `POST /api/risk/monitor`：按 RW 原文评估交易，返回 hits / alert_level / 模板 reason。
+- 新增规则引擎骨架（`tool/risk` + `service/risk`），首条高优先级规则 **RW-011**（高风险国家/地区，金额 ≥ 10000）。
+- 阶段 1 仅内存评估，不落库、不广播、不调 LLM；权限复用 `RISK_READ`。
+- 新增 `app/main.py`，仅挂载风控路由，便于本地/Postman 调试。
+
+#### 风控监测阶段 2（优先级 1～2 + 置信度）
+
+- 新增规则：**RW-013 / 018 / 019**（优先级 1）、**RW-004 / 005**（优先级 2），阈值与条件对齐 RW 原文。
+- 新增浅检/深检门控与 `confidence` / `skip_full` 字段（`grader.py`）。
+- monitor 入参扩展窗口预聚合字段（PEP、归集、涉赌特征等），仍不查库。
+
+#### 风控监测阶段 3（落库 / 广播 / 权限 / LLM）
+
+- 预警落库（默认内存仓储，可选 MySQL `fin_risk_alert`）；中/高自动生成简化工单号。
+- Redis 频道 `event:risk_alert` 广播（失败不阻断；内存总线可自证）。
+- LLM mock 生成 reason + `llm_review`（不改级别；`off` 模式模板兜底）。
+- 查询/处置 API 与字段白名单；开发态 `POST /api/risk/dev/token` 便于联调。
+
 #### Settings 与数据库连接管理
 
 - 新增基于 `pydantic-settings` 的集中配置管理，支持从 `.env` 加载环境变量、敏感信息脱敏和必要配置校验。
