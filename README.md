@@ -97,3 +97,32 @@ Streamlit → Chat API → 智能客服 Agent → RAG Service
 当前项目处于框架初始化阶段。空目录中的 `.gitkeep` 是 Git 目录占位文件，不包含业务逻辑；目录内加入正式代码后，可以删除对应的 `.gitkeep`。
 
 `docs/` 和 `.idea/` 已配置为本地忽略目录，不会随 Git 提交上传。
+
+## 客服与数据分析模块
+
+当前实现覆盖需求文档中的 RAG 知识库、智能客服 Agent 和 NL2SQL 数据分析 Agent：
+
+- 知识库元数据使用 MySQL `fin_knowledge_meta`，切片向量写入 Milvus 的 FAQ、产品和政策三个集合。
+- FAQ 每个问答对独立成块；长文档按 512 字符、64 字符重叠切分并保留标题层级。
+- 客服 Agent 支持产品咨询、政策解读、FAQ、闲聊、转人工五类意图及 Redis 多轮会话。
+- 数据分析 Agent 使用动态 Schema、SQL 只读校验、100 行限制、结果解读和 10 分钟 Redis 缓存。
+
+云端数据库只监听服务器回环地址。先安装开发依赖并启动 SSH 隧道：
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python scripts/ssh_tunnel.py
+```
+
+另开终端导入 `docs/公司业务` 下的全部文档并启动 API：
+
+```powershell
+python -m scripts.ingest_business_documents
+uvicorn app.main:app --reload
+```
+
+Swagger 地址为 `http://127.0.0.1:8000/api/docs`，`/docs` 会自动跳转。知识库写接口需要管理员 JWT；客服接口需要 `chat:use`，分析接口还需要 `analytics:read`。
+
+Agent 默认通过百炼 OpenAI 兼容接口调用 `qwen3.7-plus`；在 `.env` 设置
+`LLM_API_KEY` 即可。调用失败会按 1、2、4 秒重试，仍失败时使用本地抽取式
+客服回答与需求文档规定场景的 NL2SQL 模板降级。
