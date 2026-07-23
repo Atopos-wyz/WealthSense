@@ -1,4 +1,4 @@
-"""映射公共错误码且可安全对外暴露的领域异常体系。"""
+"""Public application exceptions and operator-specific domain errors."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from app.models.error_codes import ErrorCode, get_error_definition
 
 
 class AppException(Exception):
-    """可通过统一 API 响应安全返回的基础异常。"""
+    """Base exception exposed through the shared API response envelope."""
 
     def __init__(
         self,
@@ -68,3 +68,33 @@ class ResourceNotFoundError(AppException):
 class ConflictError(AppException):
     def __init__(self, message: str = "资源状态冲突") -> None:
         super().__init__(ErrorCode.CONFLICT, message=message)
+
+
+class OperatorError(Exception):
+    """Error returned by the Business Operator Agent API."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        retryable: bool = False,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.retryable = retryable
+        self.details = details or {}
+
+
+class OperatorNotFoundError(OperatorError):
+    pass
+
+
+class OperatorConflictError(OperatorError):
+    pass
+
+
+class OperatorPermissionDeniedError(OperatorError):
+    pass

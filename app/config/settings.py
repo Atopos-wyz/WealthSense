@@ -1,4 +1,4 @@
-"""从环境变量加载的强类型应用配置。"""
+"""Strongly typed configuration shared by public infrastructure and Agents."""
 
 from __future__ import annotations
 
@@ -19,66 +19,180 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DEVELOPMENT_JWT_SECRET = "development-only-change-me"
 
 
+def _wealthsense_alias(name: str) -> AliasChoices:
+    return AliasChoices(f"WEALTHSENSE_{name}", name)
+
+
 class Settings(BaseSettings):
-    """公共应用基础设施的集中配置。"""
+    """Central configuration for shared services and the operator Agent."""
 
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        populate_by_name=True,
         extra="ignore",
     )
 
     app_name: str = "WealthSense"
-    app_version: str = "0.1.0"
-    app_env: Literal["development", "test", "production"] = "development"
+    app_env: Literal["development", "test", "production"] = Field(
+        default="development",
+        validation_alias=AliasChoices("APP_ENV", "WEALTHSENSE_APP_ENV"),
+    )
     debug: bool = False
-
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     log_json: bool = True
 
     jwt_secret_key: SecretStr = SecretStr(DEFAULT_DEVELOPMENT_JWT_SECRET)
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     jwt_access_token_expire_minutes: int = Field(default=60, ge=1, le=1440)
-    jwt_issuer: str = "wealthsense"
+    jwt_issuer: str = Field(
+        default="wealthsense",
+        validation_alias=AliasChoices("JWT_ISSUER", "WEALTHSENSE_JWT_ISSUER"),
+    )
     jwt_audience: str = "wealthsense-api"
 
     mysql_host: str = "127.0.0.1"
     mysql_port: int = Field(default=3306, ge=1, le=65535)
     mysql_database: str = "finance"
     mysql_user: str = "finance_app"
-    mysql_password: SecretStr
+    mysql_password: SecretStr = SecretStr("not-configured")
     mysql_pool_size: int = Field(default=5, ge=1, le=100)
     mysql_max_overflow: int = Field(default=10, ge=0, le=200)
     mysql_pool_recycle_seconds: int = Field(default=1800, ge=60)
-    mysql_tunnel_port: int = Field(default=13306, ge=1, le=65535)
-    ssh_host: str | None = None
 
     redis_host: str = "127.0.0.1"
     redis_port: int = Field(default=6379, ge=1, le=65535)
     redis_db: int = Field(default=0, ge=0)
-    redis_password: SecretStr
+    redis_password: SecretStr = SecretStr("not-configured")
     redis_max_connections: int = Field(default=20, ge=1, le=1000)
 
     neo4j_uri: str = "bolt://127.0.0.1:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: SecretStr
+    neo4j_password: SecretStr = SecretStr("not-configured")
     neo4j_database: str = "neo4j"
     neo4j_max_connection_pool_size: int = Field(default=20, ge=1, le=1000)
 
     milvus_host: str = "127.0.0.1"
     milvus_port: int = Field(default=19530, ge=1, le=65535)
     milvus_user: str = "root"
-    milvus_root_password: SecretStr = Field(
-        validation_alias=AliasChoices(
-            "milvus_root_password",
-            "MILVUS_ROOT_PASSWORD",
-            "MILVUS_PASSWORD",
-        )
-    )
+    milvus_root_password: SecretStr = SecretStr("not-configured")
     milvus_database: str = "default"
-
     database_connect_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+
+    mysql_url: SecretStr | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("MYSQL_URL"),
+    )
+    redis_url: SecretStr | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("REDIS_URL"),
+    )
+    ssh_tunnel_enabled: bool = Field(
+        default=False,
+        validation_alias=_wealthsense_alias("SSH_TUNNEL_ENABLED"),
+    )
+    ssh_host: str | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("SSH_HOST"),
+    )
+    ssh_port: int = Field(
+        default=22,
+        ge=1,
+        le=65535,
+        validation_alias=_wealthsense_alias("SSH_PORT"),
+    )
+    ssh_username: str | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("SSH_USERNAME"),
+    )
+    ssh_password: SecretStr | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("SSH_PASSWORD"),
+    )
+    ssh_known_hosts: str = Field(
+        default="~/.ssh/known_hosts",
+        validation_alias=_wealthsense_alias("SSH_KNOWN_HOSTS"),
+    )
+    ssh_remote_mysql_host: str = Field(
+        default="127.0.0.1",
+        validation_alias=_wealthsense_alias("SSH_REMOTE_MYSQL_HOST"),
+    )
+    ssh_remote_mysql_port: int = Field(
+        default=3306,
+        ge=1,
+        le=65535,
+        validation_alias=_wealthsense_alias("SSH_REMOTE_MYSQL_PORT"),
+    )
+    ssh_remote_redis_host: str = Field(
+        default="127.0.0.1",
+        validation_alias=_wealthsense_alias("SSH_REMOTE_REDIS_HOST"),
+    )
+    ssh_remote_redis_port: int = Field(
+        default=6379,
+        ge=1,
+        le=65535,
+        validation_alias=_wealthsense_alias("SSH_REMOTE_REDIS_PORT"),
+    )
+    ssh_keepalive_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+        validation_alias=_wealthsense_alias("SSH_KEEPALIVE_SECONDS"),
+    )
+    confirmation_ttl_seconds: int = Field(
+        default=900,
+        ge=60,
+        validation_alias=_wealthsense_alias("CONFIRMATION_TTL_SECONDS"),
+    )
+    risk_review_ttl_seconds: int = Field(
+        default=300,
+        ge=30,
+        validation_alias=_wealthsense_alias("RISK_REVIEW_TTL_SECONDS"),
+    )
+    idempotency_ttl_seconds: int = Field(
+        default=3600,
+        ge=60,
+        validation_alias=_wealthsense_alias("IDEMPOTENCY_TTL_SECONDS"),
+    )
+    jwt_secret: str = Field(
+        default="development-jwt-secret-change-me",
+        validation_alias=_wealthsense_alias("JWT_SECRET"),
+    )
+    customer_event_hmac_secret: str = Field(
+        default="dev-customer-event-secret",
+        validation_alias=_wealthsense_alias("CUSTOMER_EVENT_HMAC_SECRET"),
+    )
+    advisor_event_hmac_secret: str = Field(
+        default="dev-advisor-event-secret",
+        validation_alias=_wealthsense_alias("ADVISOR_EVENT_HMAC_SECRET"),
+    )
+    risk_event_hmac_secret: str = Field(
+        default="dev-risk-event-secret",
+        validation_alias=_wealthsense_alias("RISK_EVENT_HMAC_SECRET"),
+    )
+    analyst_event_hmac_secret: str = Field(
+        default="dev-analyst-event-secret",
+        validation_alias=_wealthsense_alias("ANALYST_EVENT_HMAC_SECRET"),
+    )
+    operator_event_hmac_secret: str = Field(
+        default="dev-operator-event-secret",
+        validation_alias=_wealthsense_alias("OPERATOR_EVENT_HMAC_SECRET"),
+    )
+    event_stream_key: str = Field(
+        default="agent:events:durable",
+        validation_alias=_wealthsense_alias("EVENT_STREAM_KEY"),
+    )
+    trusted_agent_ids: set[str] = Field(
+        default={
+            "customer",
+            "advisor",
+            "risk",
+            "analyst",
+            "operator",
+        },
+        validation_alias=_wealthsense_alias("TRUSTED_AGENT_IDS"),
+    )
 
     @field_validator(
         "mysql_password",
@@ -114,12 +228,30 @@ class Settings(BaseSettings):
         return value
 
     @model_validator(mode="after")
-    def validate_production_security(self) -> Settings:
+    def validate_configuration(self) -> "Settings":
         if (
             self.app_env == "production"
-            and self.jwt_secret_key.get_secret_value() == DEFAULT_DEVELOPMENT_JWT_SECRET
+            and self.jwt_secret_key.get_secret_value()
+            == DEFAULT_DEVELOPMENT_JWT_SECRET
         ):
             raise ValueError("生产环境必须配置 JWT_SECRET_KEY")
+        if not self.ssh_tunnel_enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("mysql_url", self.mysql_url),
+                ("redis_url", self.redis_url),
+                ("ssh_host", self.ssh_host),
+                ("ssh_username", self.ssh_username),
+                ("ssh_password", self.ssh_password),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(
+                "SSH tunnel requires configuration: " + ", ".join(missing)
+            )
         return self
 
     @property
@@ -127,25 +259,28 @@ class Settings(BaseSettings):
         return f"http://{self.milvus_host}:{self.milvus_port}"
 
     @property
-    def mysql_connect_port(self) -> int:
-        """使用SSH云端配置时避开本机3306端口。"""
+    def has_external_infrastructure(self) -> bool:
+        return bool(self.mysql_url and self.redis_url)
 
-        if (
-            self.ssh_host
-            and self.mysql_host in {"127.0.0.1", "localhost"}
-        ):
-            return self.mysql_tunnel_port
-        return self.mysql_port
+    @property
+    def is_production(self) -> bool:
+        return self.app_env == "production"
+
+    @property
+    def event_hmac_secrets(self) -> dict[str, str]:
+        return {
+            "customer": self.customer_event_hmac_secret,
+            "advisor": self.advisor_event_hmac_secret,
+            "risk": self.risk_event_hmac_secret,
+            "analyst": self.analyst_event_hmac_secret,
+            "operator": self.operator_event_hmac_secret,
+        }
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """返回按约定只读的缓存配置实例。"""
-
     return Settings()
 
 
 def clear_settings_cache() -> None:
-    """清除配置缓存，主要用于测试和受控重载。"""
-
     get_settings.cache_clear()
