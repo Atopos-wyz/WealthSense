@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Any
+from typing import Any, Protocol
 
 from app.models.schemas.common import OperationIntent
 
@@ -13,6 +13,18 @@ class MockOperationError(RuntimeError):
 
 class MockOperationTimeout(TimeoutError):
     pass
+
+
+class OperationTool(Protocol):
+    async def execute(
+        self,
+        intent: OperationIntent,
+        operation_id: str,
+        params: dict[str, Any],
+        idempotency_key: str,
+    ) -> dict[str, Any]: ...
+
+    async def get_status(self, operation_id: str) -> dict[str, Any] | None: ...
 
 
 class OperationToolRegistry:

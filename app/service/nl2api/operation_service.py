@@ -42,7 +42,7 @@ from app.service.nl2api.validation_service import (
 from app.tool.operation.registry import (
     MockOperationError,
     MockOperationTimeout,
-    OperationToolRegistry,
+    OperationTool,
 )
 from app.utils.exceptions import (
     ConflictError,
@@ -60,7 +60,7 @@ class OperationService:
         repository: OperationRepository,
         state_store: StateStore,
         publisher: EventPublisher,
-        tool_registry: OperationToolRegistry,
+        tool_registry: OperationTool,
         *,
         risk_review_ttl_seconds: int = 300,
         confirmation_ttl_seconds: int = 900,
@@ -766,7 +766,7 @@ class OperationService:
                     result = await self.tool_registry.execute(
                         record.intent,
                         record.operation_id,
-                        record.params,
+                        self._tool_params(record),
                         idempotency_key,
                     )
                 except MockOperationTimeout:
@@ -888,7 +888,7 @@ class OperationService:
             result = await self.tool_registry.execute(
                 record.intent,
                 record.operation_id,
-                record.params,
+                self._tool_params(record),
                 idempotency_key,
             )
         except MockOperationTimeout:
@@ -930,6 +930,14 @@ class OperationService:
         )
         await self._publish_result(record)
         return self._response(record, request_id)
+
+    @staticmethod
+    def _tool_params(record: OperationRecord) -> dict[str, Any]:
+        return {
+            **record.params,
+            "_organization_id": record.organization_id,
+            "_operator_id": record.operator_id,
+        }
 
     async def _transition(
         self,

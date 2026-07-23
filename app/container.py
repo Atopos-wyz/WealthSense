@@ -19,6 +19,9 @@ from app.dao.mysql.operation_repository import (
     OperationRepository,
     SqlAlchemyOperationRepository,
 )
+from app.dao.mysql.mock_business_repository import (
+    SqlAlchemyMockBusinessRepository,
+)
 from app.dao.redis.event_publisher import (
     DurableEventPublisher,
     EventPublisher,
@@ -33,7 +36,8 @@ from app.dao.redis.state_store import (
 )
 from app.event.event_router import OperatorEventRouter
 from app.service.nl2api.operation_service import OperationService
-from app.tool.operation.registry import OperationToolRegistry
+from app.tool.operation.database_registry import DatabaseOperationToolRegistry
+from app.tool.operation.registry import OperationTool, OperationToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +102,7 @@ class AppContainer:
     repository: OperationRepository
     state_store: StateStore
     publisher: EventPublisher
-    tool_registry: OperationToolRegistry
+    tool_registry: OperationTool
     operation_service: OperationService
     operator_agent: BusinessOperatorAgent
     event_router: OperatorEventRouter
@@ -181,6 +185,12 @@ async def build_container(settings: Settings) -> AppContainer:
             repository: OperationRepository = SqlAlchemyOperationRepository(
                 session_factory
             )
+            mock_business_repository = SqlAlchemyMockBusinessRepository(
+                session_factory
+            )
+            tool_registry: OperationTool = DatabaseOperationToolRegistry(
+                mock_business_repository
+            )
             redis = create_redis_client(redis_url)
             await redis.ping()
             state_store: StateStore = RedisStateStore(redis)
@@ -199,9 +209,9 @@ async def build_container(settings: Settings) -> AppContainer:
             repository = InMemoryOperationRepository()
             state_store = InMemoryStateStore()
             transport = InMemoryEventPublisher(settings.event_hmac_secrets)
+            tool_registry = OperationToolRegistry()
 
         publisher: EventPublisher = DurableEventPublisher(repository, transport)
-        tool_registry = OperationToolRegistry()
         operation_service = OperationService(
             repository,
             state_store,
