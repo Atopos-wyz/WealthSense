@@ -13,7 +13,13 @@ class ApiTests(unittest.TestCase):
     def setUp(self) -> None:
         self.settings_patcher = patch(
             "app.main.get_settings",
-            return_value=Settings(_env_file=None),
+            return_value=Settings(
+                _env_file=None,
+                app_env="development",
+                mysql_url=None,
+                redis_url=None,
+                ssh_tunnel_enabled=False,
+            ),
         )
         self.settings_patcher.start()
 

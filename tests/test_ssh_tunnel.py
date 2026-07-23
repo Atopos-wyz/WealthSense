@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -37,6 +38,29 @@ class SshSettingsTests(unittest.TestCase):
         self.assertNotIn("mysql-secret", rendered)
         self.assertNotIn("redis-secret", rendered)
         self.assertNotIn("ssh-secret", rendered)
+
+    def test_explicit_test_settings_ignore_infrastructure_environment(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "WEALTHSENSE_APP_ENV": "production",
+                "WEALTHSENSE_MYSQL_URL": (
+                    "mysql+aiomysql://user:pass@server.example.com/db"
+                ),
+                "WEALTHSENSE_REDIS_URL": "redis://server.example.com/0",
+                "WEALTHSENSE_SSH_TUNNEL_ENABLED": "true",
+            },
+        ):
+            settings = Settings(
+                _env_file=None,
+                app_env="development",
+                mysql_url=None,
+                redis_url=None,
+                ssh_tunnel_enabled=False,
+            )
+        self.assertFalse(settings.has_external_infrastructure)
+        self.assertFalse(settings.ssh_tunnel_enabled)
+        self.assertEqual(settings.app_env, "development")
 
 
 class SshUrlTests(unittest.TestCase):

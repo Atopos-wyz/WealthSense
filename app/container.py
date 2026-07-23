@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
@@ -34,6 +35,62 @@ from app.event.event_router import OperatorEventRouter
 from app.service.nl2api.operation_service import OperationService
 from app.tool.operation.registry import OperationToolRegistry
 
+logger = logging.getLogger(__name__)
+
+
+async def _wait_for_task_ignoring_cancellation(
+    task: asyncio.Task,
+) -> bool:
+    was_cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            was_cancelled = True
+    return was_cancelled
+
+
+async def _start_ssh_tunnel(tunnel: SshTunnelManager) -> None:
+    start_task = asyncio.create_task(asyncio.to_thread(tunnel.start))
+    was_cancelled = await _wait_for_task_ignoring_cancellation(start_task)
+    if start_task.cancelled():
+        raise asyncio.CancelledError
+    start_task.result()
+    if was_cancelled:
+        raise asyncio.CancelledError
+
+
+async def _close_external_resources(
+    redis: Redis | None,
+    engine: AsyncEngine | None,
+    ssh_tunnel: SshTunnelManager | None,
+    *,
+    raise_errors: bool,
+) -> None:
+    errors: list[BaseException] = []
+    if redis:
+        try:
+            await redis.aclose()
+        except BaseException as exc:
+            errors.append(exc)
+            logger.exception("failed to close Redis client")
+    if engine:
+        try:
+            await engine.dispose()
+        except BaseException as exc:
+            errors.append(exc)
+            logger.exception("failed to dispose SQLAlchemy engine")
+    if ssh_tunnel:
+        try:
+            await asyncio.to_thread(ssh_tunnel.close)
+        except BaseException as exc:
+            errors.append(exc)
+            logger.exception("failed to close SSH tunnel")
+    if errors and raise_errors:
+        raise RuntimeError(
+            f"{len(errors)} infrastructure resource(s) failed to close"
+        ) from errors[0]
+
 
 @dataclass(slots=True)
 class AppContainer:
@@ -53,12 +110,12 @@ class AppContainer:
     async def close(self) -> None:
         if self.subscriber:
             self.subscriber.stop()
-        if self.redis:
-            await self.redis.aclose()
-        if self.engine:
-            await self.engine.dispose()
-        if self.ssh_tunnel:
-            await asyncio.to_thread(self.ssh_tunnel.close)
+        await _close_external_resources(
+            self.redis,
+            self.engine,
+            self.ssh_tunnel,
+            raise_errors=True,
+        )
 
 
 async def build_container(settings: Settings) -> AppContainer:
@@ -104,7 +161,7 @@ async def build_container(settings: Settings) -> AppContainer:
                     redis_remote_port=settings.ssh_remote_redis_port,
                     keepalive_seconds=settings.ssh_keepalive_seconds,
                 )
-                await asyncio.to_thread(ssh_tunnel.start)
+                await _start_ssh_tunnel(ssh_tunnel)
                 if not (
                     ssh_tunnel.mysql_endpoint and ssh_tunnel.redis_endpoint
                 ):
@@ -142,16 +199,7 @@ async def build_container(settings: Settings) -> AppContainer:
             repository = InMemoryOperationRepository()
             state_store = InMemoryStateStore()
             transport = InMemoryEventPublisher(settings.event_hmac_secrets)
-    except Exception:
-        if redis:
-            await redis.aclose()
-        if engine:
-            await engine.dispose()
-        if ssh_tunnel:
-            await asyncio.to_thread(ssh_tunnel.close)
-        raise
 
-    try:
         publisher: EventPublisher = DurableEventPublisher(repository, transport)
         tool_registry = OperationToolRegistry()
         operation_service = OperationService(
@@ -181,11 +229,23 @@ async def build_container(settings: Settings) -> AppContainer:
             engine=engine,
             ssh_tunnel=ssh_tunnel,
         )
-    except Exception:
-        if redis:
-            await redis.aclose()
-        if engine:
-            await engine.dispose()
-        if ssh_tunnel:
-            await asyncio.to_thread(ssh_tunnel.close)
+    except BaseException as original_error:
+        cleanup_task = asyncio.create_task(
+            _close_external_resources(
+                redis,
+                engine,
+                ssh_tunnel,
+                raise_errors=False,
+            )
+        )
+        cancelled_during_cleanup = (
+            await _wait_for_task_ignoring_cancellation(cleanup_task)
+        )
+        if not cleanup_task.cancelled():
+            cleanup_task.result()
+        if (
+            cancelled_during_cleanup
+            and not isinstance(original_error, asyncio.CancelledError)
+        ):
+            raise asyncio.CancelledError from original_error
         raise

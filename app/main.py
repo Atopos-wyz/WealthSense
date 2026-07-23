@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -9,7 +9,7 @@ from sqlalchemy import text
 from app.api.operation.mock_routes import router as mock_router
 from app.api.operation.routes import router as operation_router
 from app.config.settings import get_settings
-from app.container import build_container
+from app.container import AppContainer, build_container
 from app.event.channels import EventChannel
 from app.utils.exceptions import (
     ConflictError,
@@ -53,6 +53,69 @@ async def monitor_risk_timeouts(
             pass
 
 
+async def finish_background_task(
+    task: asyncio.Task,
+    *,
+    name: str,
+    timeout: float,
+) -> None:
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
+    except TimeoutError:
+        task.cancel()
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(task),
+                timeout=timeout,
+            )
+        except TimeoutError:
+            logger.error("%s ignored cancellation", name)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("%s failed while being cancelled", name)
+        logger.warning("%s did not stop before timeout", name)
+    except asyncio.CancelledError:
+        if not task.cancelled():
+            raise
+    except Exception:
+        logger.exception("%s stopped with an error", name)
+
+
+async def _shutdown_application(
+    container: AppContainer,
+    subscriber_task: asyncio.Task | None,
+    timeout_task: asyncio.Task,
+    stop_event: asyncio.Event,
+) -> None:
+    try:
+        if subscriber_task:
+            container.subscriber.stop()
+            await finish_background_task(
+                subscriber_task,
+                name="Redis event subscriber",
+                timeout=2,
+            )
+        stop_event.set()
+        await finish_background_task(
+            timeout_task,
+            name="operator maintenance task",
+            timeout=10,
+        )
+    finally:
+        await container.close()
+
+
+async def _wait_for_shutdown(task: asyncio.Task) -> bool:
+    was_cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            was_cancelled = True
+    return was_cancelled
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     container = await build_container(get_settings())
@@ -76,22 +139,20 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        if subscriber_task:
-            container.subscriber.stop()
-            try:
-                await asyncio.wait_for(subscriber_task, timeout=2)
-            except TimeoutError:
-                subscriber_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await subscriber_task
-        stop_event.set()
-        try:
-            await asyncio.wait_for(timeout_task, timeout=10)
-        except TimeoutError:
-            timeout_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await timeout_task
-        await container.close()
+        shutdown_task = asyncio.create_task(
+            _shutdown_application(
+                container,
+                subscriber_task,
+                timeout_task,
+                stop_event,
+            )
+        )
+        cancelled_during_shutdown = await _wait_for_shutdown(shutdown_task)
+        if shutdown_task.cancelled():
+            raise asyncio.CancelledError
+        shutdown_task.result()
+        if cancelled_during_shutdown:
+            raise asyncio.CancelledError
 
 
 app = FastAPI(
