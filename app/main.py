@@ -2,14 +2,18 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.api.chat.router import router as chat_router
+from app.api.knowledge.router import router as knowledge_router
 from app.api.operation.mock_routes import router as mock_router
 from app.api.operation.routes import router as operation_router
 from app.api.risk.monitor_router import router as risk_monitor_router
 from app.api.risk.pages import pages_router
+from app.api.system import router as system_router
 from app.config.settings import get_settings
 from app.container import AppContainer, build_container
 from app.event.channels import EventChannel
@@ -166,15 +170,27 @@ app = FastAPI(
 )
 app.add_middleware(TraceIdMiddleware)
 register_exception_handlers(app)
+app.include_router(chat_router)
+app.include_router(knowledge_router)
 app.include_router(operation_router)
 app.include_router(risk_monitor_router)
 app.include_router(pages_router)
+app.include_router(system_router)
+
 try:
     from app.api.risk.router import router as risk_assessment_router
 
     app.include_router(risk_assessment_router)
 except Exception:
     logger.exception("风险评估路由未挂载（依赖未就绪）")
+
+try:
+    from app.api.profile.router import router as profile_router
+
+    app.include_router(profile_router)
+except Exception:
+    logger.exception("客户画像路由未挂载（依赖未就绪）")
+
 if not get_settings().is_production:
     app.include_router(mock_router)
 
@@ -232,3 +248,7 @@ async def operator_error_handler(
             }
         },
     )
+
+
+if __name__ == '__main__':
+    uvicorn.run(app,host="0.0.0.0",port=8000)

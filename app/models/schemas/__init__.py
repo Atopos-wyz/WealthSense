@@ -1,6 +1,12 @@
 """Public and Business Operator Pydantic schemas."""
 
 from app.models.schemas.auth import CurrentUser, Permission, TokenPayload, UserRole
+from app.models.schemas.chat import (
+    AgentType,
+    ChatRequest,
+    ChatResponse,
+    SessionMessage,
+)
 from app.models.schemas.common import (
     AgentEvent,
     AgentId,
@@ -21,10 +27,13 @@ from app.models.schemas.response import ApiResponse, ErrorItem, PageData
 
 __all__ = [
     "AgentEvent",
+    "AgentType",
     "AgentId",
     "ApiResponse",
     "CancelOperationRequest",
     "ChatOperationRequest",
+    "ChatRequest",
+    "ChatResponse",
     "ConfirmOperationRequest",
     "CurrentUser",
     "ErrorDetail",
@@ -36,6 +45,7 @@ __all__ = [
     "Permission",
     "RiskDecision",
     "RiskReviewResult",
+    "SessionMessage",
     "TokenPayload",
     "UpdateOperationRequest",
     "UserRole",

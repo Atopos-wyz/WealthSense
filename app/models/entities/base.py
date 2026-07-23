@@ -1,7 +1,5 @@
 """ORM 基类（仅风控等自建实体使用，不改他人表）。"""
 
-"""SQLAlchemy 声明式模型基类。"""
-
 from __future__ import annotations
 
 from sqlalchemy.orm import DeclarativeBase

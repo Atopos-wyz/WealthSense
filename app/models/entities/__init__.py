@@ -1,5 +1,7 @@
 """实体包。"""
 
+from app.models.entities.conversation import ConversationArchive
+from app.models.entities.knowledge import KnowledgeMeta
 from app.models.entities.operation import (
     AuditLogEntity,
     Base,
@@ -43,6 +45,8 @@ __all__ = [
     "MockSuspiciousReportEntity",
     "MockTransactionEntity",
     "MockWorkOrderEntity",
+    "ConversationArchive",
+    "KnowledgeMeta",
     "RiskAlertEntity",
     "RiskAlertRecord",
 ]
