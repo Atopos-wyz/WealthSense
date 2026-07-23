@@ -1,4 +1,8 @@
+"""Redis / Agent 事件频道常量。"""
+
 from enum import StrEnum
+
+RISK_ALERT_CHANNEL = "event:risk_alert"
 
 
 class EventChannel(StrEnum):
@@ -8,4 +12,3 @@ class EventChannel(StrEnum):
     RISK_COMMAND = "agent:risk:command"
     AGENT_RESULT = "agent:result"
     TRANSACTION_EVENT = "event:transaction"
-

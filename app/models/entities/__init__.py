@@ -1,3 +1,5 @@
+"""实体包。"""
+
 from app.models.entities.operation import (
     AuditLogEntity,
     Base,
@@ -20,6 +22,7 @@ from app.models.entities.mock_business import (
     MockTransactionEntity,
     MockWorkOrderEntity,
 )
+from app.models.entities.risk_alert import RiskAlertEntity, RiskAlertRecord
 
 __all__ = [
     "AuditLogEntity",
@@ -40,4 +43,6 @@ __all__ = [
     "MockSuspiciousReportEntity",
     "MockTransactionEntity",
     "MockWorkOrderEntity",
+    "RiskAlertEntity",
+    "RiskAlertRecord",
 ]

@@ -1,4 +1,10 @@
-from app.event.channels import EventChannel
+"""事件包。"""
 
-__all__ = ["EventChannel"]
+from app.event.channels import RISK_ALERT_CHANNEL, EventChannel
+from app.event.payloads import RiskAlertEvent
 
+__all__ = [
+    "RISK_ALERT_CHANNEL",
+    "EventChannel",
+    "RiskAlertEvent",
+]

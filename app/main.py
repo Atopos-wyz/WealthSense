@@ -8,15 +8,19 @@ from sqlalchemy import text
 
 from app.api.operation.mock_routes import router as mock_router
 from app.api.operation.routes import router as operation_router
+from app.api.risk.monitor_router import router as risk_monitor_router
+from app.api.risk.pages import pages_router
 from app.config.settings import get_settings
 from app.container import AppContainer, build_container
 from app.event.channels import EventChannel
+from app.utils.exception_handlers import register_exception_handlers
 from app.utils.exceptions import (
     OperatorConflictError as ConflictError,
     OperatorError,
     OperatorNotFoundError as NotFoundError,
     OperatorPermissionDeniedError as PermissionDeniedError,
 )
+from app.utils.logger import TraceIdMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +164,17 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(TraceIdMiddleware)
+register_exception_handlers(app)
 app.include_router(operation_router)
+app.include_router(risk_monitor_router)
+app.include_router(pages_router)
+try:
+    from app.api.risk.router import router as risk_assessment_router
+
+    app.include_router(risk_assessment_router)
+except Exception:
+    logger.exception("风险评估路由未挂载（依赖未就绪）")
 if not get_settings().is_production:
     app.include_router(mock_router)
 
