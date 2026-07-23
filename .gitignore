@@ -1,2 +1,10 @@
 /docs/
 /.idea/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.env
+.venv/
+venv/
+

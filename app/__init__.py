@@ -1,0 +1,2 @@
+"""WealthSense application package."""
+
