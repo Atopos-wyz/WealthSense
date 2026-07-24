@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.api.chat.advisor import router as advisor_router
+from app.api.chat.pages import pages_router as advisor_pages_router
 from app.api.chat.router import router as chat_router
 from app.api.knowledge.router import router as knowledge_router
 from app.api.operation.mock_routes import router as mock_router
@@ -171,6 +173,8 @@ app = FastAPI(
 app.add_middleware(TraceIdMiddleware)
 register_exception_handlers(app)
 app.include_router(chat_router)
+app.include_router(advisor_router)
+app.include_router(advisor_pages_router)
 app.include_router(knowledge_router)
 app.include_router(operation_router)
 app.include_router(risk_monitor_router)

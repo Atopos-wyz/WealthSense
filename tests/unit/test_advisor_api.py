@@ -56,6 +56,13 @@ class AdvisorApiTest(unittest.TestCase):
         self.assertIn("recommendations", body["data"])
         self.assertIn("reasoning", body["data"])
 
+    def test_advisor_portal_is_available(self) -> None:
+        response = self.client.get("/advisor")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("切换使用身份", response.text)
+        self.assertIn("/api/chat/advisor/stream", response.text)
+
     def test_advisor_stream_returns_sse_events(self) -> None:
         response = self.client.post(
             "/api/chat/advisor/stream",
