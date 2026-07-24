@@ -331,6 +331,12 @@ class Settings(BaseSettings):
         return f"http://{self.milvus_host}:{self.milvus_port}"
 
     @property
+    def mysql_connect_port(self) -> int:
+        """兼容旧调用：实际连接端口与 MYSQL_PORT 一致（隧道时在 .env 写 13306）。"""
+
+        return self.mysql_port
+
+    @property
     def has_external_infrastructure(self) -> bool:
         return bool(self.mysql_url and self.redis_url)
 
