@@ -5,7 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 
 from app.config.settings import Settings, get_settings
-from app.dao.mysql.risk_alert_dao import InMemoryRiskAlertStore
+from app.dao.mysql.risk_alert_dao import (
+    InMemoryRiskAlertStore,
+    MySQLRiskAlertStore,
+    RiskAlertStore,
+)
 from app.dao.redis.connection import RedisConnectionManager
 from app.event.risk_alert_publisher import (
     CompositeEventPublisher,
@@ -34,7 +38,24 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/risk", tags=["risk"])
 
 _memory_publisher = InMemoryEventPublisher()
-_alert_store = InMemoryRiskAlertStore()
+
+
+def _build_alert_store(settings: Settings | None = None) -> RiskAlertStore:
+    """按 RISK_ALERT_STORE 选择内存或 MySQL；失败回退内存，避免启动阻断。"""
+
+    cfg = settings or get_settings()
+    if cfg.risk_alert_store != "mysql":
+        logger.info("风控预警仓储: memory")
+        return InMemoryRiskAlertStore()
+    try:
+        from app.dao.manager import get_database_manager
+
+        store = MySQLRiskAlertStore(get_database_manager().mysql)
+        logger.info("风控预警仓储: mysql (fin_risk_alert)")
+        return store
+    except Exception:
+        logger.warning("风控 MySQL 仓储初始化失败，回退 memory", exc_info=True)
+        return InMemoryRiskAlertStore()
 
 
 def _build_publisher() -> CompositeEventPublisher:
@@ -54,11 +75,12 @@ def _build_publisher() -> CompositeEventPublisher:
     )
 
 
+_alert_store = _build_alert_store()
 _monitor_service = RiskMonitorService(
     store=_alert_store,
     publisher=_build_publisher(),
     memory_publisher=_memory_publisher,
-    llm=ReasonLlmService(mode="mock"),
+    llm=ReasonLlmService.from_settings(get_settings()),
 )
 _alert_service = RiskAlertService(_alert_store)
 _handle_service = RiskHandleService(_alert_store)

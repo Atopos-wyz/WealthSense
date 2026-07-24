@@ -9,14 +9,19 @@ from pydantic import BaseModel, Field
 
 
 class RiskAlertEvent(BaseModel):
+    """风控预警广播载荷（附录 A 定稿字段）。"""
+
     event_type: str = "risk_alert"
+    schema_version: str = "1.0"
     alert_id: int
     customer_id: str
     alert_level: str
     trigger_rules: list[str]
     confidence: float
     llm_review: str | None = None
+    llm_conflict: bool = False
     reason_summary: str | None = None
+    work_order_id: str | None = None
     timestamp: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

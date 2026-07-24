@@ -28,6 +28,7 @@ class RiskAlertEntity(Base):
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     llm_review: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    llm_conflict: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(32), default="未处理")
     work_order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     broadcasted: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -46,6 +47,7 @@ class RiskAlertRecord:
         "reason",
         "confidence",
         "llm_review",
+        "llm_conflict",
         "status",
         "work_order_id",
         "broadcasted",
@@ -64,6 +66,7 @@ class RiskAlertRecord:
         reason: str | None,
         confidence: float,
         llm_review: str | None,
+        llm_conflict: bool = False,
         status: str = "未处理",
         work_order_id: str | None = None,
         broadcasted: bool = False,
@@ -78,6 +81,7 @@ class RiskAlertRecord:
         self.reason = reason
         self.confidence = confidence
         self.llm_review = llm_review
+        self.llm_conflict = llm_conflict
         self.status = status
         self.work_order_id = work_order_id
         self.broadcasted = broadcasted

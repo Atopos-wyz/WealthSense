@@ -68,6 +68,7 @@ def alert_to_public_dict(record: RiskAlertRecord) -> dict[str, Any]:
         "reason": record.reason,
         "confidence": record.confidence,
         "llm_review": record.llm_review,
+        "llm_conflict": record.llm_conflict,
         "status": record.status,
         "work_order_id": record.work_order_id,
         "broadcasted": record.broadcasted,
