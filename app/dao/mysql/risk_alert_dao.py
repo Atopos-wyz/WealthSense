@@ -6,8 +6,8 @@ import json
 from typing import Protocol
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.dao.mysql.connection import MySQLConnectionManager
 from app.models.entities.risk_alert import RiskAlertEntity, RiskAlertRecord, utc_now
 
 
@@ -66,60 +66,68 @@ class InMemoryRiskAlertStore:
 
 
 class MySQLRiskAlertStore:
-    """MySQL 实现；由调用方注入已打开的 AsyncSession。"""
+    """MySQL 实现；注入 MySQLConnectionManager，每次操作开短生命周期 session。"""
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    def __init__(self, mysql: MySQLConnectionManager) -> None:
+        self._mysql = mysql
 
     async def create(self, record: RiskAlertRecord) -> RiskAlertRecord:
-        entity = RiskAlertEntity(
-            customer_id=record.customer_id,
-            record_type=record.record_type,
-            alert_level=record.alert_level,
-            hit_rules_json=json.dumps(record.hit_rules, ensure_ascii=False),
-            reason=record.reason,
-            confidence=record.confidence,
-            llm_review=record.llm_review,
-            status=record.status,
-            work_order_id=record.work_order_id,
-            broadcasted=record.broadcasted,
-            created_at=record.created_at or utc_now(),
-        )
-        self._session.add(entity)
-        await self._session.flush()
-        if entity.alert_level in {"中", "高"} and entity.record_type == "alert":
-            entity.work_order_id = entity.work_order_id or f"WO-{entity.id}"
-        await self._session.commit()
-        await self._session.refresh(entity)
-        return _entity_to_record(entity)
+        async with self._mysql.session() as session:
+            entity = RiskAlertEntity(
+                customer_id=record.customer_id,
+                record_type=record.record_type,
+                alert_level=record.alert_level,
+                hit_rules_json=json.dumps(record.hit_rules, ensure_ascii=False),
+                reason=record.reason,
+                confidence=record.confidence,
+                llm_review=record.llm_review,
+                llm_conflict=record.llm_conflict,
+                status=record.status,
+                work_order_id=record.work_order_id,
+                broadcasted=record.broadcasted,
+                created_at=record.created_at or utc_now(),
+            )
+            session.add(entity)
+            await session.flush()
+            if entity.alert_level in {"中", "高"} and entity.record_type == "alert":
+                entity.work_order_id = entity.work_order_id or f"WO-{entity.id}"
+            await session.commit()
+            await session.refresh(entity)
+            return _entity_to_record(entity)
 
     async def get(self, alert_id: int) -> RiskAlertRecord | None:
-        entity = await self._session.get(RiskAlertEntity, alert_id)
-        return _entity_to_record(entity) if entity else None
+        async with self._mysql.session() as session:
+            entity = await session.get(RiskAlertEntity, alert_id)
+            return _entity_to_record(entity) if entity else None
 
     async def list_by_customer(self, customer_id: str) -> list[RiskAlertRecord]:
-        result = await self._session.execute(
-            select(RiskAlertEntity).where(RiskAlertEntity.customer_id == customer_id)
-        )
-        return [_entity_to_record(item) for item in result.scalars().all()]
+        async with self._mysql.session() as session:
+            result = await session.execute(
+                select(RiskAlertEntity).where(
+                    RiskAlertEntity.customer_id == customer_id
+                )
+            )
+            return [_entity_to_record(item) for item in result.scalars().all()]
 
     async def update_status(
         self, alert_id: int, status: str
     ) -> RiskAlertRecord | None:
-        entity = await self._session.get(RiskAlertEntity, alert_id)
-        if entity is None:
-            return None
-        entity.status = status
-        await self._session.commit()
-        await self._session.refresh(entity)
-        return _entity_to_record(entity)
+        async with self._mysql.session() as session:
+            entity = await session.get(RiskAlertEntity, alert_id)
+            if entity is None:
+                return None
+            entity.status = status
+            await session.commit()
+            await session.refresh(entity)
+            return _entity_to_record(entity)
 
     async def mark_broadcasted(self, alert_id: int) -> None:
-        entity = await self._session.get(RiskAlertEntity, alert_id)
-        if entity is None:
-            return
-        entity.broadcasted = True
-        await self._session.commit()
+        async with self._mysql.session() as session:
+            entity = await session.get(RiskAlertEntity, alert_id)
+            if entity is None:
+                return
+            entity.broadcasted = True
+            await session.commit()
 
 
 def _entity_to_record(entity: RiskAlertEntity) -> RiskAlertRecord:
@@ -136,6 +144,7 @@ def _entity_to_record(entity: RiskAlertEntity) -> RiskAlertRecord:
         reason=entity.reason,
         confidence=entity.confidence,
         llm_review=entity.llm_review,
+        llm_conflict=bool(entity.llm_conflict),
         status=entity.status,
         work_order_id=entity.work_order_id,
         broadcasted=entity.broadcasted,

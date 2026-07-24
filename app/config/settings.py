@@ -208,6 +208,34 @@ class Settings(BaseSettings):
         le=1,
         validation_alias=_wealthsense_alias("LLM_CONFIDENCE_THRESHOLD"),
     )
+    # 风控预警仓储：memory=进程内（单测/默认）；mysql=落库 fin_risk_alert
+    risk_alert_store: Literal["memory", "mysql"] = Field(
+        default="memory",
+        validation_alias=_wealthsense_alias("RISK_ALERT_STORE"),
+    )
+    # 风控隔离 LLM（不写死供应商；缺省可回退通用 llm_*）
+    risk_llm_mode: Literal["mock", "http", "off"] = Field(
+        default="mock",
+        validation_alias=_wealthsense_alias("RISK_LLM_MODE"),
+    )
+    risk_llm_base_url: str | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("RISK_LLM_BASE_URL"),
+    )
+    risk_llm_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("RISK_LLM_API_KEY"),
+    )
+    risk_llm_model: str | None = Field(
+        default=None,
+        validation_alias=_wealthsense_alias("RISK_LLM_MODEL"),
+    )
+    risk_llm_timeout_seconds: float = Field(
+        default=10,
+        gt=0,
+        le=60,
+        validation_alias=_wealthsense_alias("RISK_LLM_TIMEOUT_SECONDS"),
+    )
     trusted_agent_ids: set[str] = Field(
         default={
             "customer",

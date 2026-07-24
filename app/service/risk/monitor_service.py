@@ -136,6 +136,7 @@ class RiskMonitorService:
             reason=enrichment.reason,
             confidence=enrichment.confidence,
             llm_review=enrichment.llm_review,
+            llm_conflict=enrichment.llm_conflict,
             status="未处理",
         )
         saved = await self._alert_service.save(record)
@@ -151,7 +152,9 @@ class RiskMonitorService:
                 trigger_rules=[hit.rule_id for hit in hits],
                 confidence=enrichment.confidence,
                 llm_review=enrichment.llm_review,
+                llm_conflict=saved.llm_conflict,
                 reason_summary=(enrichment.reason or "")[:200],
+                work_order_id=saved.work_order_id,
             )
             redis_published = bool(await self._publisher.publish_risk_alert(event))
             if isinstance(self._publisher, CompositeEventPublisher):
@@ -170,6 +173,7 @@ class RiskMonitorService:
             skip_full=engine_result.skip_full,
             alert_id=saved.id,
             llm_review=enrichment.llm_review,
+            llm_conflict=saved.llm_conflict,
             llm_source=enrichment.source,
             record_type=saved.record_type,
             status=saved.status,
@@ -221,6 +225,7 @@ class RiskMonitorService:
             skip_full=skip_full,
             alert_id=alert_id,
             llm_review=None,
+            llm_conflict=False,
             llm_source=None,
             record_type=record_type,
             status=status,

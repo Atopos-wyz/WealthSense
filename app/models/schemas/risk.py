@@ -198,6 +198,7 @@ class MonitorResponse(PublicSchema):
     skip_full: bool = False
     alert_id: int | None = None
     llm_review: str | None = None
+    llm_conflict: bool = False
     llm_source: str | None = None
     record_type: str | None = None
     status: str | None = None
@@ -226,6 +227,7 @@ class AlertView(PublicSchema):
     reason: str | None = None
     confidence: float
     llm_review: str | None = None
+    llm_conflict: bool = False
     status: str
     work_order_id: str | None = None
     broadcasted: bool
