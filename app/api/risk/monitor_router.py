@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, Query
 
 from app.config.settings import Settings, get_settings
@@ -198,11 +200,61 @@ async def redis_status(
             "last_redis_ok": last_ok,
             "last_redis_error": last_err,
             "hint": (
-                "先 SUBSCRIBE event:risk_alert，再在联调台提交中/高命中；"
-                "看 redis_published / receivers。"
+                "先 SUBSCRIBE event:risk_alert，再提交中/高命中；"
+                "同时会写入 risk:alert:{id} 与 risk:alert:recent（演示缓存）。"
             ),
+            "cache_keys": {
+                "snapshot": "risk:alert:{alert_id}",
+                "recent_list": "risk:alert:recent",
+            },
         }
     )
+
+
+@router.get(
+    "/dev/cached-alerts",
+    response_model=ApiResponse[dict],
+    summary="[开发] 查看 Redis 旁路缓存的最近预警快照",
+)
+async def cached_alerts(
+    _: CurrentUser = Depends(require_permissions(Permission.RISK_READ)),
+    settings: Settings = Depends(get_settings),
+    limit: int = Query(default=20, ge=1, le=50),
+) -> ApiResponse[dict]:
+    if settings.app_env == "production":
+        return success_response({"recent": [], "message": "生产环境禁用"})
+
+    from app.event.risk_alert_publisher import RISK_ALERT_RECENT_KEY
+
+    redis_mgr = RedisConnectionManager(settings)
+    try:
+        await redis_mgr.connect()
+        raw_items = await redis_mgr.client.lrange(RISK_ALERT_RECENT_KEY, 0, limit - 1)
+        recent: list[dict] = []
+        for item in raw_items:
+            try:
+                recent.append(json.loads(item) if isinstance(item, str) else item)
+            except Exception:
+                recent.append({"raw": item})
+        return success_response(
+            {
+                "key": RISK_ALERT_RECENT_KEY,
+                "count": len(recent),
+                "recent": recent,
+                "hint": "单条快照 key 形如 risk:alert:{alert_id}，TTL 24h",
+            }
+        )
+    except Exception as exc:
+        return success_response(
+            {
+                "key": RISK_ALERT_RECENT_KEY,
+                "count": 0,
+                "recent": [],
+                "error": str(exc),
+            }
+        )
+    finally:
+        await redis_mgr.close()
 
 
 @router.post(

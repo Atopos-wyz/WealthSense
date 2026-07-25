@@ -1,6 +1,14 @@
 -- 风控预警表（仅本模块；与 RiskAlertEntity 对齐）
--- 执行：SSH 隧道连 MySQL 后，在目标库（如 finance）手动执行本文件。
+-- 本地执行示例（DBeaver 连 root@127.0.0.1:3306）：
+--   1) 先执行下方 CREATE DATABASE（若已有 finance 可跳过）
+--   2) 选中 finance 库后再执行 CREATE TABLE
 -- 不要用 metadata.create_all 在生产建表。
+
+CREATE DATABASE IF NOT EXISTS finance
+  DEFAULT CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE finance;
 
 CREATE TABLE IF NOT EXISTS fin_risk_alert (
     id              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '预警 ID = 事件 alert_id',

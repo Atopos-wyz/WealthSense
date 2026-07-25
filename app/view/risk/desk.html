@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WealthSense 风控值班台</title>
+  <link rel="stylesheet" href="/risk-static/desk.css">
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar glass">
+      <div class="brand-row">
+        <div class="brand-mark">W</div>
+        <div><strong>WealthSense</strong><span>风控值班台</span></div>
+      </div>
+      <nav id="nav" class="nav-list">
+        <button class="nav-item active" type="button" data-view="monitor"><span>交易监测</span><i>01</i></button>
+        <button class="nav-item" type="button" data-view="alerts"><span>预警台账</span><i>02</i></button>
+        <button class="nav-item" type="button" data-view="subscribe"><span>订阅收报</span><i>03</i></button>
+        <div class="nav-caption">概念阶段</div>
+        <button class="nav-item" type="button" data-view="cs"><span>客服工作台</span><i>--</i></button>
+        <button class="nav-item" type="button" data-view="advisor"><span>投顾建议</span><i>--</i></button>
+        <button class="nav-item" type="button" data-view="ops"><span>操作工单</span><i>--</i></button>
+        <button class="nav-item" type="button" data-view="profile"><span>客户画像</span><i>--</i></button>
+      </nav>
+      <div class="account-row">
+        <div class="avatar">R</div>
+        <div><strong>风控专员</strong><span>Demo Officer</span></div>
+      </div>
+      <a class="back-link" href="/risk-demo">← 返回平台首页</a>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">AML OPERATIONS</p>
+          <h2 id="pageTitle">交易监测</h2>
+        </div>
+        <div class="top-actions">
+          <span id="apiStatus" class="status"><b></b>服务待命</span>
+          <button type="button" class="secondary" id="btnRedis">检查 Redis</button>
+          <button type="button" class="secondary" id="btnRedisCache">查看 Redis 缓存</button>
+          <button type="button" class="primary" id="btnToken">获取 Token</button>
+        </div>
+      </header>
+
+      <div class="work-layout" id="workLayout">
+        <div class="work-main">
+          <section id="view-monitor" class="view active">
+            <article class="panel glass">
+              <div class="panel-head">
+                <div><p class="eyebrow">PUBLISHER</p><h3>提交监测</h3></div>
+              </div>
+              <p class="subtle">先在右侧开始订阅，再提交中/高场景，可对照同一 alert_id。</p>
+              <div class="form-stack">
+                <label>Bearer Token<input id="token" type="text" placeholder="点击右上角获取 Token"></label>
+                <label>演示场景<select id="scenario"></select></label>
+                <label>请求体 JSON<textarea id="payload"></textarea></label>
+                <div class="actions">
+                  <button type="button" class="primary" id="btnMonitor">提交监测</button>
+                  <button type="button" class="secondary" id="btnFill">重新填充场景</button>
+                </div>
+                <p id="toast" class="toast" role="status"></p>
+                <div class="metric-grid">
+                  <article class="metric glass"><span>命中</span><strong id="mHit">--</strong><small>规则是否触发</small></article>
+                  <article class="metric glass"><span>级别</span><strong id="mLevel">--</strong><small>规则定级</small></article>
+                  <article class="metric glass accent"><span>工单号</span><strong id="mWo">--</strong><small>WO-{alert_id}</small></article>
+                  <article class="metric glass"><span>Redis</span><strong id="mRedis">--</strong><small>是否发布成功</small></article>
+                  <article class="metric glass"><span>冲突</span><strong id="mConflict">--</strong><small>llm_conflict</small></article>
+                  <article class="metric glass"><span>alert_id</span><strong id="mId">--</strong><small>幂等键</small></article>
+                </div>
+                <pre class="raw" id="monitorOut">等待提交…</pre>
+              </div>
+            </article>
+          </section>
+
+          <section id="view-alerts" class="view">
+            <article class="panel glass">
+              <div class="panel-head">
+                <div><p class="eyebrow">ALERT LEDGER</p><h3>预警台账</h3></div>
+              </div>
+              <div class="form-stack">
+                <label>customer_id<input id="customerId" type="text" value="DEMO-SANCTION-01"></label>
+                <div class="actions">
+                  <button type="button" class="primary" id="btnList">查询预警</button>
+                  <button type="button" class="secondary" id="btnConfirm" disabled>处置：已确认</button>
+                  <button type="button" class="secondary" id="btnExclude" disabled>处置：已排除</button>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>ID</th><th>级别</th><th>类型</th><th>状态</th><th>广播</th><th>工单</th></tr>
+                    </thead>
+                    <tbody id="alertBody">
+                      <tr><td colspan="6">暂无数据</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <pre class="raw" id="alertOut">选中一行查看详情</pre>
+              </div>
+            </article>
+          </section>
+
+          <section id="view-subscribe" class="view">
+            <article class="panel glass">
+              <div class="panel-head">
+                <div><p class="eyebrow">LIVE FEED</p><h3>订阅收报说明</h3></div>
+              </div>
+              <p class="subtle">右侧面板为订阅方模拟：SSE 连接本机 Redis <code>event:risk_alert</code>。</p>
+              <p class="subtle">讲解顺序：开始订阅 → 提交中高监测 → 右侧弹出与左侧相同的 alert_id / WO。</p>
+              <p class="subtle">停止订阅后再监测，右侧不再新增（Pub/Sub 不补历史）。</p>
+            </article>
+          </section>
+
+          <section id="view-cs" class="view">
+            <article class="panel glass">
+              <div class="panel-head">
+                <div><p class="eyebrow">CONCEPT</p><h3>客服工作台 <span class="badge">未接通</span></h3></div>
+              </div>
+              <div class="fake-grid">
+                <div class="fake-tile glass"><h3>会话队列</h3><p>今日待回复 12 · 平均等待 46s</p></div>
+                <div class="fake-tile glass"><h3>渠道</h3><p>App 在线 / 电话 / 邮件</p></div>
+              </div>
+              <ul class="fake-list">
+                <li><span>C10021 · 赎回进度咨询</span><span>排队中</span></li>
+                <li><span>C10088 · 风险测评过期</span><span>处理中</span></li>
+              </ul>
+              <div class="actions" style="margin-top:16px">
+                <button type="button" class="secondary" data-fake-action>接入会话</button>
+                <button type="button" class="secondary" data-fake-action>转交工单</button>
+              </div>
+            </article>
+          </section>
+
+          <section id="view-advisor" class="view">
+            <article class="panel glass">
+              <div class="panel-head">
+                <div><p class="eyebrow">CONCEPT</p><h3>投顾建议 <span class="badge">未接通</span></h3></div>
+              </div>
+              <div class="fake-grid">
+                <div class="fake-tile glass"><h3>稳健配置</h3><p>货币 40% · 债基 35% · 权益 25%</p></div>
+                <div class="fake-tile glass"><h3>今日观点</h3><p>利率震荡，维持再平衡</p></div>
+              </div>
+              <div class="actions" style="margin-top:16px">
+                <button type="button" class="secondary" data-fake-action>生成报告</button>
+              </div>
+            </article>
+          </section>
+
+          <section id="view-ops" class="view">
+            <article class="panel glass">
+              <div class="panel-head">
+                <div><p class="eyebrow">CONCEPT</p><h3>操作工单 <span class="badge">未接通</span></h3></div>
+              </div>
+              <p class="subtle">风控只产出 WO 号；真工单表由操作模块维护，本页不写库。</p>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>工单号</th><th>来源</th><th>优先级</th><th>状态</th></tr></thead>
+                  <tbody>
+                    <tr><td>WO-DEMO-881</td><td>客服投诉</td><td>中</td><td>处理中</td></tr>
+                    <tr><td>WO-DEMO-882</td><td>赎回确认</td><td>高</td><td>待审核</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="actions" style="margin-top:16px">
+                <button type="button" class="secondary" data-fake-action>创建工单</button>
+              </div>
+            </article>
+          </section>
+
+          <section id="view-profile" class="view">
+            <article class="panel glass">
+              <div class="panel-head">
+                <div><p class="eyebrow">CONCEPT</p><h3>客户画像 <span class="badge">未接通</span></h3></div>
+              </div>
+              <div class="fake-grid">
+                <div class="fake-tile glass"><h3>客户</h3><p>DEMO-SANCTION-01</p></div>
+                <div class="fake-tile glass"><h3>风险等级</h3><p>R3 · 适中</p></div>
+                <div class="fake-tile glass"><h3>KYC</h3><p>已核验 · 2025-11</p></div>
+              </div>
+              <div class="actions" style="margin-top:16px">
+                <button type="button" class="secondary" data-fake-action>刷新图谱</button>
+              </div>
+            </article>
+          </section>
+        </div>
+
+        <!-- Signature: always-on subscriber rail for real risk views -->
+        <aside class="sub-rail panel glass" id="subRail">
+          <div class="panel-head">
+            <div><p class="eyebrow">SUBSCRIBER</p><h3>实时收报</h3></div>
+            <span class="badge">SSE</span>
+          </div>
+          <div class="sub-meta">
+            <span id="subState">未订阅</span>
+            <span>已收 <strong id="subCount">0</strong></span>
+          </div>
+          <div class="actions">
+            <button type="button" class="primary" id="btnSubStart">开始订阅</button>
+            <button type="button" class="secondary" id="btnSubStop" disabled>停止订阅</button>
+            <button type="button" class="secondary" id="btnSubClear">清空</button>
+          </div>
+          <p class="subtle" style="margin-top:12px">频道 event:risk_alert · 仅中/高命中推送</p>
+          <div class="event-feed" id="eventFeed">
+            <div class="empty" id="feedEmpty">尚无事件。点「开始订阅」后提交中高监测。</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <script src="/risk-static/desk.js"></script>
+</body>
+</html>

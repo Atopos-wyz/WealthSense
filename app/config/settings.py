@@ -248,8 +248,6 @@ class Settings(BaseSettings):
     )
 
     @field_validator(
-        "mysql_password",
-        "redis_password",
         "neo4j_password",
         "milvus_root_password",
     )
@@ -257,6 +255,15 @@ class Settings(BaseSettings):
     def validate_non_empty_secret(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value().strip():
             raise ValueError("数据库密码不能为空")
+        return value
+
+    @field_validator("mysql_password", "redis_password", mode="before")
+    @classmethod
+    def allow_empty_local_db_password(cls, value: object) -> object:
+        """本机 MySQL/Redis 允许空密码（与 DBeaver 无密码登录一致）。"""
+
+        if value is None:
+            return ""
         return value
 
     @field_validator(
