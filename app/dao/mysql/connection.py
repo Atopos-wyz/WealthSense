@@ -47,10 +47,11 @@ class MySQLConnectionManager:
             if self._engine is not None:
                 return
 
+            raw_password = self._settings.mysql_password.get_secret_value()
             url = URL.create(
                 drivername="mysql+aiomysql",
                 username=self._settings.mysql_user,
-                password=self._settings.mysql_password.get_secret_value(),
+                password=raw_password if raw_password != "" else None,
                 host=self._settings.mysql_host,
                 port=self._settings.mysql_port,
                 database=self._settings.mysql_database,

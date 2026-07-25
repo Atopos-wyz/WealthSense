@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WealthSense 财富智能服务平台</title>
+  <link rel="stylesheet" href="/risk-static/home.css">
+</head>
+<body>
+  <header class="site-header" id="siteHeader">
+    <a class="wordmark" href="/risk-demo"><span>W</span><strong>WealthSense</strong><small>财富智能服务平台</small></a>
+    <nav>
+      <a href="#about">平台介绍</a>
+      <a href="#products">能力模块</a>
+      <a href="#flow">监测链路</a>
+      <a href="#contact">开始演示</a>
+    </nav>
+    <a class="cta-enter" href="/risk-demo/desk">进入风控台</a>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="heroTitle">
+      <div class="hero-media" aria-hidden="true"></div>
+      <div class="hero-shade" aria-hidden="true"></div>
+      <div class="hero-content">
+        <p>WEALTHSENSE · AML MONITOR</p>
+        <h1 id="heroTitle">让每一笔交易<br>都经得起规则检验</h1>
+        <div class="hero-copy">
+          规则引擎定级、预警落库、中高广播到订阅方。<br>
+          当前演示开放风控监测；客服、投顾、操作与画像为概念壳。
+        </div>
+        <div class="hero-actions">
+          <a class="primary-link" href="/risk-demo/desk">进入风控值班台</a>
+          <a class="outline-link" href="#flow">查看广播链路</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="intro band">
+      <div class="section-label">平台介绍</div>
+      <div class="intro-copy">
+        <h2>从交易监测<br>到协同处置</h2>
+        <p>
+          WealthSense 面向财富管理机构的多智能体协作场景。本演示聚焦反洗钱交易监测：
+          命中规则后写入本地 MySQL，并向 Redis 频道发布事件，让订阅方即时感知——无需依赖远端协作环境。
+        </p>
+      </div>
+      <div class="intro-stats">
+        <div><strong>6</strong><span>已实现监测规则</span></div>
+        <div><strong>中/高</strong><span>触发实时广播</span></div>
+        <div><strong>1</strong><span>本地库为数据真相</span></div>
+      </div>
+    </section>
+
+    <section id="products" class="products band">
+      <div class="section-heading">
+        <div>
+          <p>MODULES</p>
+          <h2>为协作预留的能力入口</h2>
+        </div>
+        <span>只有风控监测真实接通 API；其余模块展示产品完整形态，便于讲解边界。</span>
+      </div>
+      <div class="product-grid">
+        <article class="product featured">
+          <div class="product-number">01</div>
+          <div>
+            <span class="availability live">已开放</span>
+            <h3>风控监测台</h3>
+            <p>场景化监测、预警台账、人工处置，以及 Redis 订阅方实时收报，完整演示广播机制。</p>
+          </div>
+          <a href="/risk-demo/desk">进入工作台</a>
+        </article>
+        <article class="product">
+          <div class="product-number">02</div>
+          <div>
+            <span class="availability">概念阶段</span>
+            <h3>客服 / 投顾</h3>
+            <p>会话协同与投顾建议入口。演示壳可见，不调用对应 Agent 服务。</p>
+          </div>
+          <button type="button" disabled>功能建设中</button>
+        </article>
+        <article class="product">
+          <div class="product-number">03</div>
+          <div>
+            <span class="availability">概念阶段</span>
+            <h3>操作 / 画像</h3>
+            <p>正式工单与客户画像由其它模块维护；风控本阶段仅产出 WO 业务号。</p>
+          </div>
+          <button type="button" disabled>功能建设中</button>
+        </article>
+      </div>
+    </section>
+
+    <section id="flow" class="flow band">
+      <div class="section-heading">
+        <div>
+          <p>BROADCAST</p>
+          <h2>当场能看懂的链路</h2>
+        </div>
+        <span>讲解时先开订阅，再提交中高场景，左右对照同一 alert_id。</span>
+      </div>
+      <div class="flow-steps">
+        <article><i>01</i><h3>规则判定</h3><p>引擎命中 RW 规则，按级别就高定级，LLM 只解释不改级。</p></article>
+        <article><i>02</i><h3>预警落库</h3><p>写入本机 fin_risk_alert，中高生成 WO-{id}。</p></article>
+        <article><i>03</i><h3>Redis 发布</h3><p>PUBLISH 到 event:risk_alert，失败不阻断落库。</p></article>
+        <article><i>04</i><h3>订阅收报</h3><p>工作台 SSE 实时弹出事件卡片，直观证明广播。</p></article>
+      </div>
+    </section>
+
+    <section id="contact" class="contact band">
+      <p>READY FOR DEMO</p>
+      <h2>打开值班台<br>开始订阅，再打一笔中高交易</h2>
+      <a href="/risk-demo/desk">进入风控值班台</a>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="wordmark" href="/risk-demo"><span>W</span><strong>WealthSense</strong></a>
+    <p>本地演示版本 · 风控模块已接通</p>
+    <div><a href="/risk-lab">开发联调台</a></div>
+  </footer>
+  <script src="/risk-static/home.js"></script>
+</body>
+</html>

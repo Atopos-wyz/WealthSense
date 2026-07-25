@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from app.api.chat.router import router as chat_router
@@ -12,7 +13,9 @@ from app.api.knowledge.router import router as knowledge_router
 from app.api.operation.mock_routes import router as mock_router
 from app.api.operation.routes import router as operation_router
 from app.api.risk.monitor_router import router as risk_monitor_router
+from app.api.risk.pages import STATIC_DIR as RISK_STATIC_DIR
 from app.api.risk.pages import pages_router
+from app.api.risk.subscribe_stream import router as risk_subscribe_stream_router
 from app.api.system import router as system_router
 from app.config.settings import get_settings
 from app.container import AppContainer, build_container
@@ -174,7 +177,13 @@ app.include_router(chat_router)
 app.include_router(knowledge_router)
 app.include_router(operation_router)
 app.include_router(risk_monitor_router)
+app.include_router(risk_subscribe_stream_router)
 app.include_router(pages_router)
+app.mount(
+    "/risk-static",
+    StaticFiles(directory=str(RISK_STATIC_DIR)),
+    name="risk_static",
+)
 app.include_router(system_router)
 
 try:

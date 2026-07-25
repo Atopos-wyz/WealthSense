@@ -1,4 +1,4 @@
-"""事件发布（默认内存总线；可选 Redis Pub/Sub）。"""
+"""事件发布（默认内存总线；可选 Redis Pub/Sub + 演示用快照缓存）。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from app.event.payloads import RiskAlertEvent
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# 演示用旁路缓存（MySQL 仍为真相；Pub/Sub 仍不持久）
+RISK_ALERT_CACHE_KEY = "risk:alert:{alert_id}"
+RISK_ALERT_RECENT_KEY = "risk:alert:recent"
+RISK_ALERT_CACHE_TTL_SECONDS = 86400  # 24h
+RISK_ALERT_RECENT_MAX = 50
 
 
 class RiskAlertPublisher(Protocol):
@@ -37,14 +43,23 @@ class RedisEventPublisher:
     async def publish_risk_alert(self, event: RiskAlertEvent) -> bool:
         if not self._redis.connected:
             await self._redis.connect()
-        payload = json.dumps(event.to_publish_dict(), ensure_ascii=False)
-        receivers = await self._redis.client.publish(RISK_ALERT_CHANNEL, payload)
+        payload_dict = event.to_publish_dict()
+        payload = json.dumps(payload_dict, ensure_ascii=False)
+        client = self._redis.client
+        receivers = await client.publish(RISK_ALERT_CHANNEL, payload)
+        # 旁路快照：便于在 Redis 客户端看到 key（非可靠主存）
+        cache_key = RISK_ALERT_CACHE_KEY.format(alert_id=event.alert_id)
+        await client.set(cache_key, payload, ex=RISK_ALERT_CACHE_TTL_SECONDS)
+        await client.lpush(RISK_ALERT_RECENT_KEY, payload)
+        await client.ltrim(RISK_ALERT_RECENT_KEY, 0, RISK_ALERT_RECENT_MAX - 1)
+        await client.expire(RISK_ALERT_RECENT_KEY, RISK_ALERT_CACHE_TTL_SECONDS)
         self.last_error = None
         logger.info(
-            "已广播风控预警到 Redis channel=%s receivers=%s alert_id=%s",
+            "已广播并缓存风控预警 channel=%s receivers=%s alert_id=%s cache=%s",
             RISK_ALERT_CHANNEL,
             receivers,
             event.alert_id,
+            cache_key,
         )
         return True
 
@@ -81,7 +96,7 @@ class CompositeEventPublisher:
             self.last_redis_ok = False
             self.last_redis_error = str(exc)
             logger.warning(
-                "Redis 广播失败，已保留内存事件副本: %s",
+                "Redis 广播/缓存失败，已保留内存事件副本: %s",
                 exc,
                 exc_info=True,
             )

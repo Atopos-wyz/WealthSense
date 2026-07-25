@@ -38,11 +38,12 @@ class RedisConnectionManager:
             if self._client is not None:
                 return
 
+            raw_password = self._settings.redis_password.get_secret_value().strip()
             client = Redis(
                 host=self._settings.redis_host,
                 port=self._settings.redis_port,
                 db=self._settings.redis_db,
-                password=self._settings.redis_password.get_secret_value(),
+                password=raw_password or None,
                 decode_responses=True,
                 max_connections=self._settings.redis_max_connections,
                 socket_connect_timeout=self._settings.database_connect_timeout_seconds,
